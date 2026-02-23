@@ -21,3 +21,11 @@ PRICE_CACHE_DURATION = 5  # Cache prices for 5 seconds
 SYMBOL_CACHE_DURATION = 3600  # Cache symbols for 1 hour
 MAX_RETRIES = 3  # Retry failed API calls
 RETRY_DELAY = 1  # Delay between retries in seconds
+
+# Razorpay Configuration
+RAZORPAY_KEY_ID = 'your_razorpay_key_id'  # Replace with your Razorpay Key ID
+RAZORPAY_KEY_SECRET = 'your_razorpay_key_secret'  # Replace with your Razorpay Key Secret
+RAZORPAY_PLAN_ID = 'your_razorpay_plan_id'  # Replace with your Razorpay Plan ID
+
+# Subscription Configuration
+SUBSCRIPTION_PRICE_INR = 500  # ₹500 per month

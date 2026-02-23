@@ -1,15 +1,15 @@
-
 from flask import Flask, render_template, request, session, jsonify, redirect, url_for, Response
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from authlib.integrations.flask_client import OAuth
 from dotenv import load_dotenv
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import wraps
 from flask import redirect, url_for, flash
 from flask_login import current_user
 
 import logic
+import config
 import os
 import csv
 import io
@@ -17,13 +17,15 @@ import io
 # Import your User model (ensure models.py exists as provided previously)
 from models import db, User
 
-
+# Import Razorpay
+import razorpay
+import hashlib
+import hmac
 
 app = Flask(__name__)
 app.secret_key = "trading_secret_key_ultra_secure_2025"
 
 # Database & Login Configuration
-# Replace your old SQLALCHEMY_DATABASE_URI line with this:
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///users.db').replace("postgres://", "postgresql://", 1)
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SESSION_PERMANENT'] = False
@@ -37,28 +39,59 @@ login_manager.init_app(app)
 oauth = OAuth(app)
 google = oauth.register(
     name='google',
-
-client_id=os.getenv('GOOGLE_CLIENT_ID'), # REPLACE THIS
-    client_secret=os.getenv('GOOGLE_CLIENT_SECRET'), # REPLACE THIS
+    client_id=os.getenv('GOOGLE_CLIENT_ID'),
+    client_secret=os.getenv('GOOGLE_CLIENT_SECRET'),
     server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
     client_kwargs={'scope': 'openid email profile'}
 )
 
+# Razorpay Client Setup
+razorpay_client = razorpay.Client(auth=(config.RAZORPAY_KEY_ID, config.RAZORPAY_KEY_SECRET))
+
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
+
+# --- PUBLIC PAGES ---
+
+@app.route('/') # Change this from /home to /
+def home():
+    """Public homepage - the first thing users see"""
+    return render_template('home.html')
+
+@app.route('/home') # Keep this as an alias
+def home_alias():
+    return redirect(url_for('home'))
+
+@app.route('/about')
+def about():
+    """About page"""
+    return render_template('about.html')
+
+@app.route('/contact')
+def contact():
+    """Contact page"""
+    return render_template('contact.html')
+
+@app.route('/terms')
+def terms():
+    """Terms & Conditions page"""
+    return render_template('terms.html')
+
+@app.route('/privacy')
+def privacy():
+    """Privacy Policy page"""
+    return render_template('privacy.html')
 
 # --- AUTHENTICATION ROUTES ---
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
-        # Normalize and validate inputs
         email = (request.form.get('email') or '').strip().lower()
         username = (request.form.get('username') or '').strip()
         password = request.form.get('password') or ''
 
-        # Check for existing email or username to avoid IntegrityError
         if User.query.filter_by(email=email).first():
             flash('Email already registered. Please log in or use another email.', 'error')
             return render_template('register.html')
@@ -67,7 +100,6 @@ def register():
             flash('Username already taken. Choose a different username.', 'error')
             return render_template('register.html')
 
-        # Using pbkdf2:sha256 for modern compatibility
         hashed_pw = generate_password_hash(password)
         new_user = User(
             username=username,
@@ -82,7 +114,7 @@ def register():
         except Exception:
             db.session.rollback()
             flash('An error occurred during registration. Please try again.', 'error')
-            return render_template('register.html')
+            return redirect(url_for('login')) 
 
     return render_template('register.html')
 
@@ -92,8 +124,12 @@ def login():
         user = User.query.filter_by(email=request.form.get('email')).first()
         if user and check_password_hash(user.password, request.form.get('password')):
             login_user(user)
-            return redirect(url_for('index'))
+            return redirect(url_for('subscribe')) # Redirects to subscription after login
+        
+        flash('Invalid login credentials', 'error')
+        return redirect(url_for('home')) # Returns to home to keep the background visible
     return render_template('login.html')
+
 
 @app.route('/login/google')
 def google_login():
@@ -105,7 +141,6 @@ def google_authorize():
     user_info = token.get('userinfo')
     user = User.query.filter_by(email=user_info['email']).first()
     if not user:
-        # Create new user if they don't exist
         user = User(
             username=user_info['name'], 
             email=user_info['email'], 
@@ -114,7 +149,8 @@ def google_authorize():
         db.session.add(user)
         db.session.commit()
     login_user(user)
-    return redirect(url_for('index'))
+    # Redirect to subscription page instead of index
+    return redirect(url_for('subscribe'))
 
 @app.route('/logout')
 @login_required
@@ -122,7 +158,112 @@ def logout():
     logout_user()
     return redirect(url_for('login'))
 
-# --- ORIGINAL TRADING ROUTES (All Preserved) ---
+# --- RAZORPAY SUBSCRIPTION ROUTES ---
+
+@app.route('/subscribe')
+@login_required
+def subscribe():
+    """Render subscription page with Razorpay key"""
+    return render_template('subscribe.html', key_id=config.RAZORPAY_KEY_ID, user=current_user)
+
+@app.route('/create-subscription', methods=['POST'])
+@login_required
+def create_subscription():
+    """Create a Razorpay subscription"""
+    try:
+        subscription_data = {
+            'plan_id': config.RAZORPAY_PLAN_ID,
+            'customer_notify': 1,
+            'quantity': 1,
+            'start_at': int(datetime.utcnow().timestamp()),
+            'expire_by': int((datetime.utcnow() + timedelta(days=30)).timestamp()),
+            'notes': {
+                'user_id': current_user.id,
+                'email': current_user.email
+            }
+        }
+        
+        subscription = razorpay_client.subscription.create(subscription_data)
+        
+        return jsonify({
+            'success': True,
+            'subscription_id': subscription['id']
+        })
+    except Exception as e:
+        print(f"Error creating subscription: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 400
+
+@app.route('/payment-success', methods=['POST'])
+@login_required
+def payment_success():
+    """Verify payment and activate subscription"""
+    try:
+        data = request.get_json()
+        payment_id = data.get('razorpay_payment_id')
+        subscription_id = data.get('razorpay_subscription_id')
+        signature = data.get('razorpay_signature')
+        
+        params_dict = {
+            'razorpay_payment_id': payment_id,
+            'razorpay_subscription_id': subscription_id
+        }
+        
+        verification = razorpay_client.utility.verify_payment_signature(params_dict, signature)
+        
+        if verification is not None:
+            current_user.subscription_id = subscription_id
+            current_user.subscription_status = 'active'
+            current_user.subscription_start = datetime.utcnow()
+            current_user.subscription_end = datetime.utcnow() + timedelta(days=30)
+            current_user.is_subscribed = True
+            db.session.commit()
+            
+            return jsonify({
+                'success': True,
+                'message': 'Subscription activated successfully!'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Payment verification failed'
+            }), 400
+            
+    except Exception as e:
+        print(f"Error verifying payment: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 400
+
+@app.route('/check-subscription')
+@login_required
+def check_subscription():
+    """Check user's subscription status"""
+    if current_user.is_subscribed:
+        if current_user.subscription_end and current_user.subscription_end > datetime.utcnow():
+            return jsonify({
+                'subscribed': True,
+                'status': current_user.subscription_status,
+                'end_date': current_user.subscription_end.strftime('%Y-%m-%d')
+            })
+        else:
+            current_user.subscription_status = 'expired'
+            current_user.is_subscribed = False
+            db.session.commit()
+            return jsonify({
+                'subscribed': False,
+                'status': 'expired'
+            })
+    
+    return jsonify({
+        'subscribed': False,
+        'status': 'inactive'
+    })
+
+# --- ORIGINAL TRADING ROUTES ---
 
 @app.route("/get_live_price/<symbol>")
 @login_required
@@ -230,7 +371,7 @@ def index():
     
     return render_template(
         "index.html",
-        user=current_user, # Passed user info to template
+        user=current_user,
         trade_status=trade_status,
         sizing=sizing,
         balance=round(balance, 2),
