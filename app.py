@@ -103,13 +103,6 @@ def privacy():
     """Privacy Policy page"""
     return render_template('privacy.html')
 
-@app.route('/')
-def root():
-    if current_user.is_authenticated:
-        if current_user.subscription_end and current_user.subscription_end > datetime.utcnow():
-            return redirect('/index')
-        return redirect('/subscribe')
-    return redirect('/login')
 
 # --- AUTHENTICATION ROUTES ---
 
@@ -175,12 +168,7 @@ def login():
 
     return render_template('login.html')
 
-@app.route('/index', methods=['GET', 'POST'])
-@login_required
-@subscription_required
-def dashboard():
-    context = dashboard_defaults()
-    return render_template('index.html', **context)
+
 
 def dashboard_defaults():
     return {
@@ -443,23 +431,10 @@ def download_trades():
         writer.writerow([trade.get('time', ''), trade.get('symbol', ''), trade.get('side', ''), trade.get('qty', ''), trade.get('price', ''), trade.get('realized_pnl', ''), trade.get('commission', ''), trade.get('order_id', '')])
     output.seek(0)
     return Response(output.getvalue(), mimetype='text/csv', headers={'Content-Disposition': f'attachment; filename=trade_history_{datetime.utcnow().strftime("%Y%m%d_%H%M%S")}.csv'})
-def subscription_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if not current_user.is_authenticated:
-            return redirect(url_for('login'))
-
-        if not current_user.subscription_end:
-            return redirect(url_for('subscribe'))
-
-        if current_user.subscription_end < datetime.utcnow():
-            return redirect(url_for('subscribe'))
-
-        return f(*args, **kwargs)
-    return decorated_function
 
 
-@app.route("/", methods=["GET", "POST"])
+
+@app.route("/index", methods=["GET", "POST"])
 @login_required
 @subscription_required
 def index():
