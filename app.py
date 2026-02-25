@@ -175,12 +175,39 @@ def login():
 
     return render_template('login.html')
 
-@app.route('/index')
+@app.route('/index', methods=['GET', 'POST'])
 @login_required
 @subscription_required
 def dashboard():
-    return render_template('index.html')
+    context = dashboard_defaults()
+    return render_template('index.html', **context)
 
+def dashboard_defaults():
+    return {
+        "trade_status": None,
+        "default_side": "LONG",
+        "selected_symbol": "BTCUSDT",
+        "unutilized": 0.0,
+        "today_stats": {
+            "total_trades": 0,
+            "max_trades": 10
+        },
+        "symbols": ["BTCUSDT", "ETHUSDT"],
+        "order_type": "MARKET",
+        "margin_mode": "ISOLATED",
+        "default_entry": 0,
+        "tp1": "",
+        "tp1_pct": "",
+        "tp2": "",
+        "default_sl_type": "SL Points",
+        "default_sl_value": 0,
+        "sizing": {
+            "suggested_units": 0,
+            "suggested_leverage": 1,
+            "risk_amount": 0,
+            "error": None
+        }
+    }
 @app.route('/login/google')
 def google_login():
     return google.authorize_redirect(url_for('google_authorize', _external=True))
