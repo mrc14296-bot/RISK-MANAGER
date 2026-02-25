@@ -30,6 +30,10 @@ app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///use
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SESSION_PERMANENT'] = False
 
+# ✅ FIX: Get Plan IDs from config.py directly
+RAZORPAY_MONTHLY_PLAN_ID = config.RAZORPAY_MONTHLY_PLAN_ID
+RAZORPAY_YEARLY_PLAN_ID = config.RAZORPAY_YEARLY_PLAN_ID
+
 db.init_app(app)
 login_manager = LoginManager()
 login_manager.login_view = 'login'
@@ -171,72 +175,71 @@ def subscribe():
 def create_subscription():
     """Create a Razorpay subscription"""
     try:
+        data = request.get_json()
+        plan_type = data.get("plan_type")
+
+        if not plan_type:
+            return jsonify({
+                "success": False,
+                "error": "plan_type is required"
+            }), 400
+
+        # ✅ Select correct Razorpay Plan ID
+        if plan_type == "monthly":
+            plan_id = RAZORPAY_MONTHLY_PLAN_ID
+        elif plan_type == "yearly":
+            plan_id = RAZORPAY_YEARLY_PLAN_ID
+        else:
+            return jsonify({
+                "success": False,
+                "error": "Invalid plan type"
+            }), 400
+
         subscription_data = {
-            'plan_id': config.RAZORPAY_PLAN_ID,
-            'customer_notify': 1,
-            'quantity': 1,
-            'start_at': int(datetime.utcnow().timestamp()),
-            'expire_by': int((datetime.utcnow() + timedelta(days=30)).timestamp()),
-            'notes': {
-                'user_id': current_user.id,
-                'email': current_user.email
+            "plan_id": plan_id,          # 🔥 THIS WAS MISSING
+            "customer_notify": 1,
+             "total_count": 12,
+             "customer_notify": 1,
+            "quantity": 1,
+            "notes": {
+                "user_id": current_user.id,
+                "email": current_user.email
             }
         }
-        
         subscription = razorpay_client.subscription.create(subscription_data)
-        
+
         return jsonify({
-            'success': True,
-            'subscription_id': subscription['id']
+            "success": True,
+            "subscription_id": subscription["id"]
         })
+
     except Exception as e:
         print(f"Error creating subscription: {e}")
         return jsonify({
-            'success': False,
-            'error': str(e)
+            "success": False,
+            "error": str(e)
         }), 400
 
-@app.route('/payment-success', methods=['POST'])
+# Change the route and function name to avoid the collision
+# Rename this specific block in app.py
+@app.route('/verify-subscription', methods=['POST'])  # Changed route
 @login_required
-def payment_success():
-    """Verify payment and activate subscription"""
+def verify_subscription():  # Changed function name
     try:
         data = request.get_json()
-        payment_id = data.get('razorpay_payment_id')
-        subscription_id = data.get('razorpay_subscription_id')
-        signature = data.get('razorpay_signature')
+        # Verify signature specifically for subscriptions
+        razorpay_client.utility.verify_subscription_payment_signature(data)
         
-        params_dict = {
-            'razorpay_payment_id': payment_id,
-            'razorpay_subscription_id': subscription_id
-        }
+        # Update User Status
+        current_user.subscription_id = data.get('razorpay_subscription_id')
+        current_user.subscription_status = 'active'
+        current_user.is_subscribed = True
+        current_user.subscription_end = datetime.utcnow() + timedelta(days=30)
+        db.session.commit()
         
-        verification = razorpay_client.utility.verify_payment_signature(params_dict, signature)
-        
-        if verification is not None:
-            current_user.subscription_id = subscription_id
-            current_user.subscription_status = 'active'
-            current_user.subscription_start = datetime.utcnow()
-            current_user.subscription_end = datetime.utcnow() + timedelta(days=30)
-            current_user.is_subscribed = True
-            db.session.commit()
-            
-            return jsonify({
-                'success': True,
-                'message': 'Subscription activated successfully!'
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'error': 'Payment verification failed'
-            }), 400
-            
+        return jsonify({'success': True})
     except Exception as e:
-        print(f"Error verifying payment: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 400
+        return jsonify({'success': False, 'error': "Verification failed"}), 400
 
 @app.route('/check-subscription')
 @login_required

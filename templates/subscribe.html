@@ -215,7 +215,7 @@
 
     <div class="pricing-card">
         <div class="price-title">Pro Monthly</div>
-        <div class="price-value">₹500<span>/mo</span></div>
+        <div class="price-value">₹499<span>/mo</span></div>
         <p class="small text-secondary">Flexible month-to-month</p>
         
         <ul class="feature-list">
@@ -228,62 +228,65 @@
 
 </div>
 
-<a href="/index" class="back-link">← Return to Dashboard</a>
+<a href="/home" class="back-link">← Return to Dashboard</a>
 
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 <script>
     async function handleSubscription(planType) {
         const btnId = planType === 'yearly' ? 'rzp-button-yearly' : 'rzp-button-monthly';
         const btn = document.getElementById(btnId);
         const originalText = btn.innerHTML;
-        
-        // Show Loading State
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Securely Connecting...';
+
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Connecting...';
         btn.disabled = true;
 
         try {
-            // 1. Request Subscription ID from Backend
-            const response = await fetch('/create-subscription', { 
+            const response = await fetch('/create-subscription', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ plan: planType }) 
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ plan_type: planType })
             });
+
             const data = await response.json();
+            if (!response.ok) throw new Error(data.error);
 
-            if (data.error) throw new Error(data.error);
+          // Replace the Razorpay options in subscribe.html with this:
+const options = {
+    key: "{{ key_id }}",
+    subscription_id: data.subscription_id,
+    name: "PRO TRADING",
+    description: planType === 'yearly' ? "Annual Plan" : "Monthly Plan",
+    handler: async function (response) {
+        // Send payment details to backend for verification
+        const verifyRes = await fetch('/verify-subscription', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_subscription_id: response.razorpay_subscription_id,
+                razorpay_signature: response.razorpay_signature
+            })
+        });
+        
+        const result = await verifyRes.json();
+        if (result.success) {
+            window.location.href = "/index"; // Redirect to dashboard on success
+        } else {
+            alert("Verification failed: " + result.error);
+        }
+    },
+    prefill: { name: "{{ user.username }}", email: "{{ user.email }}" },
+    theme: { color: "#06b6d4" }
+};
 
-            // 2. Open Razorpay Checkout Modal
-            var options = {
-                "key": "{{ key_id }}",
-                "subscription_id": data.subscription_id,
-                "name": "PRO TRADING PLATFORM",
-                "description": planType === 'yearly' ? "Pro Annual Membership" : "Pro Monthly Membership",
-                "image": "https://cdn-icons-png.flaticon.com/512/2933/2933971.png",
-                "handler": function (response){
-                    // 3. Success Redirect
-                    window.location.href = "/index"; 
-                },
-                "prefill": {
-                    "name": "{{ user.username }}",
-                    "email": "{{ user.email }}"
-                },
-                "theme": {
-                    "color": "#06b6d4" // Pro Cyan
-                },
-                "modal": {
-                    "ondismiss": function() {
-                        btn.innerHTML = originalText;
-                        btn.disabled = false;
-                    }
-                }
-            };
-            
-            var rzp = new Razorpay(options);
+            const rzp = new Razorpay(options);
             rzp.open();
 
         } catch (err) {
-            console.error(err);
-            alert("Subscription failed: " + err.message);
+            alert("Error: " + err.message);
             btn.innerHTML = originalText;
             btn.disabled = false;
         }
@@ -292,6 +295,5 @@
     document.getElementById('rzp-button-yearly').onclick = () => handleSubscription('yearly');
     document.getElementById('rzp-button-monthly').onclick = () => handleSubscription('monthly');
 </script>
-
 </body>
 </html>
