@@ -128,10 +128,11 @@ def login():
         user = User.query.filter_by(email=request.form.get('email')).first()
         if user and check_password_hash(user.password, request.form.get('password')):
             login_user(user)
-            return redirect(url_for('subscribe')) # Redirects to subscription after login
+            # Redirect to /index. If they haven't paid, 
+            # @subscription_required will send them to /subscribe automatically.
+            return redirect(url_for('index')) 
         
         flash('Invalid login credentials', 'error')
-        return redirect(url_for('home')) # Returns to home to keep the background visible
     return render_template('login.html')
 
 
@@ -161,6 +162,7 @@ def google_authorize():
 def logout():
     logout_user()
     return redirect(url_for('login'))
+
 
 # --- RAZORPAY SUBSCRIPTION ROUTES ---
 
@@ -222,24 +224,25 @@ def create_subscription():
 
 # Change the route and function name to avoid the collision
 # Rename this specific block in app.py
-@app.route('/verify-subscription', methods=['POST'])  # Changed route
+@app.route('/verify-subscription', methods=['POST'])
 @login_required
-def verify_subscription():  # Changed function name
+def verify_subscription():
     try:
         data = request.get_json()
-        # Verify signature specifically for subscriptions
+        # This checks the security signature from Razorpay
         razorpay_client.utility.verify_subscription_payment_signature(data)
         
-        # Update User Status
+        # ✅ IMPORTANT: Update the user in the database
+        current_user.is_subscribed = True
         current_user.subscription_id = data.get('razorpay_subscription_id')
         current_user.subscription_status = 'active'
-        current_user.is_subscribed = True
         current_user.subscription_end = datetime.utcnow() + timedelta(days=30)
-        db.session.commit()
+        
+        db.session.commit() # Save the change!
         
         return jsonify({'success': True})
     except Exception as e:
-        return jsonify({'success': False, 'error': "Verification failed"}), 400
+        return jsonify({'success': False, 'error': str(e)}), 400
 
 @app.route('/check-subscription')
 @login_required
@@ -332,9 +335,21 @@ def download_trades():
         writer.writerow([trade.get('time', ''), trade.get('symbol', ''), trade.get('side', ''), trade.get('qty', ''), trade.get('price', ''), trade.get('realized_pnl', ''), trade.get('commission', ''), trade.get('order_id', '')])
     output.seek(0)
     return Response(output.getvalue(), mimetype='text/csv', headers={'Content-Disposition': f'attachment; filename=trade_history_{datetime.utcnow().strftime("%Y%m%d_%H%M%S")}.csv'})
+def subscription_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        # We check current_user.is_subscribed
+        # If it is False (default), they are kicked to the subscription page
+        if not getattr(current_user, 'is_subscribed', False):
+            flash("Please purchase a subscription to access the Trading Dashboard.", "warning")
+            return redirect(url_for('subscribe'))
+        return f(*args, **kwargs)
+    return decorated_function
+
 
 @app.route("/", methods=["GET", "POST"])
-@login_required
+@login_required          # MUST BE FIRST: Identify the user
+@subscription_required 
 def index():
     logic.initialize_session()
     symbols = logic.get_all_exchange_symbols()
@@ -343,6 +358,10 @@ def index():
     balance = live_bal or 0.0
     margin_used = live_margin or 0.0
     unutilized = max(balance - margin_used, 0.0)
+ 
+    logic.initialize_session()
+    symbols = logic.get_all_exchange_symbols()
+    
 
     selected_symbol = request.form.get("symbol", "BTCUSDT")
     side = request.form.get("side", "LONG")
