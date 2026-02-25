@@ -181,6 +181,16 @@
     </style>
 </head>
 <body class="font-sans text-gray-100">
+  <div class="alert alert-info">
+  {% if current_user.is_authenticated %}
+    <strong>Plan:</strong> {{ current_user.subscription_type|capitalize }} <br>
+    {% if current_user.subscription_end %}
+      <strong>Valid Until:</strong> {{ current_user.subscription_end.strftime('%d %b %Y') }}
+    {% endif %}
+  {% else %}
+    <strong>Plan:</strong> Free
+  {% endif %}
+</div>
     <!-- Navbar -->
  <nav id="navbar" class="fixed w-full top-0 z-50 transition-all duration-300">
     <div class="glass-card">
@@ -201,13 +211,23 @@
                     <a href="#contact" class="nav-link text-gray-300 hover:text-cyan-400 transition-colors font-medium">Contact</a>
                  
                     {% if current_user.is_authenticated %}
-                        <a href="/index" class="text-gray-300 hover:text-cyan-400 transition-colors font-medium">Dashboard</a>
-                        <a href="/logout" class="bg-slate-800 hover:bg-slate-700 text-white px-6 py-2 rounded-lg font-semibold transition-all">Logout</a>
-                    {% else %}
-                        <button class="btn-primary text-white px-6 py-2.5 rounded-lg font-semibold">
-                            <a class="nav-link text-white" href="/login">Login</a>
-                        </button>
-                    {% endif %}
+    
+    {% if current_user.is_subscribed %}
+        <a href="/index" class="text-gray-300 hover:text-cyan-400 transition-colors font-medium">
+            Dashboard
+        </a>
+    {% endif %}
+
+    <a href="/logout"
+       class="bg-slate-800 hover:bg-slate-700 text-white px-6 py-2 rounded-lg font-semibold transition-all">
+        Logout
+    </a>
+
+{% else %}
+    <button class="btn-primary text-white px-6 py-2.5 rounded-lg font-semibold">
+        <a class="nav-link text-white" href="/login">Login</a>
+    </button>
+{% endif %}
                 </div>
 
                 <button id="mobile-menu-btn" class="md:hidden text-white focus:outline-none">
@@ -240,7 +260,7 @@
     <a href="#pricing" class="text-2xl font-bold hover:text-cyan-400">Pricing</a>
     
     {% if current_user.is_authenticated %}
-        <a href="/index" class="text-2xl font-bold text-cyan-400">Dashboard</a>
+        <a href="/index.html" class="text-2xl font-bold text-cyan-400">Dashboard</a>
         <a href="/logout" class="text-xl font-bold text-white/60">Logout</a>
     {% else %}
         <a href="/login" class="text-2xl font-bold hover:text-cyan-400">Sign In</a>

@@ -19,3 +19,10 @@ class User(UserMixin, db.Model):
     subscription_start = db.Column(db.DateTime, nullable=True)
     subscription_end = db.Column(db.DateTime, nullable=True)
     is_subscribed = db.Column(db.Boolean, default=False)
+
+  
+    subscription_type = db.Column(db.String(20))  # monthly / yearly
+    subscription_start = db.Column(db.DateTime)
+    subscription_end = db.Column(db.DateTime)
+
+    active_session = db.Column(db.String(255), nullable=True)

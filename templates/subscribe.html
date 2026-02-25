@@ -17,12 +17,15 @@
             --border-color: #1f2937;
         }
 
-        /* REMOVE SCROLLBARS */
+        /* 1. REMOVE SCROLLBARS */
         html, body {
             overflow-x: hidden;
-            scrollbar-width: none;
+            scrollbar-width: none; /* Firefox */
+            -ms-overflow-style: none;  /* IE and Edge */
         }
-        body::-webkit-scrollbar { display: none; }
+        body::-webkit-scrollbar {
+            display: none; /* Chrome, Safari, Opera */
+        }
 
         body {
             background-color: var(--bg-dark);
@@ -58,8 +61,12 @@
             text-align: center;
         }
 
-        .pricing-card:hover { border-color: #374151; transform: translateY(-5px); }
+        .pricing-card:hover {
+            border-color: #374151;
+            transform: translateY(-5px);
+        }
 
+        /* Highlight the Yearly Plan */
         .pricing-card.featured {
             border-color: var(--primary-cyan);
             background: linear-gradient(180deg, #111827 0%, #0f172a 100%);
@@ -79,15 +86,37 @@
             border-radius: 20px;
             font-size: 0.75rem;
             font-weight: 800;
+            letter-spacing: 0.5px;
         }
 
-        .price-title { font-size: 1.1rem; font-weight: 600; color: #9ca3af; margin-bottom: 10px; text-transform: uppercase; }
+        .price-title { font-size: 1.1rem; font-weight: 600; color: #9ca3af; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; }
         .price-value { font-size: 3.5rem; font-weight: 800; margin-bottom: 5px; color: #fff; }
         .price-value span { font-size: 1.1rem; color: #6b7280; font-weight: 400; }
 
-        .feature-list { list-style: none; padding: 0; margin: 35px 0; text-align: left; flex-grow: 1; }
-        .feature-list li { margin-bottom: 15px; display: flex; align-items: center; color: #d1d5db; }
-        .feature-list li svg { color: var(--primary-cyan); margin-right: 15px; flex-shrink: 0; }
+        .feature-list {
+            list-style: none;
+            padding: 0;
+            margin: 35px 0;
+            text-align: left;
+            flex-grow: 1;
+        }
+
+        .feature-list li {
+            margin-bottom: 15px;
+            font-size: 1rem;
+            display: flex;
+            align-items: center;
+            color: #d1d5db;
+        }
+
+        .feature-list li svg {
+            color: var(--primary-cyan);
+            margin-right: 15px;
+            flex-shrink: 0;
+        }
+
+        .feature-list li.disabled { color: #4b5563; }
+        .feature-list li.disabled svg { color: #374151; }
 
         .btn-plan {
             border-radius: 16px;
@@ -101,38 +130,85 @@
             border: none;
         }
 
+        .btn-free { 
+            background: rgba(255,255,255,0.05); 
+            color: #9ca3af; 
+            border: 1px solid var(--border-color); 
+        }
+        
+        .btn-free:hover { background: rgba(255,255,255,0.1); color: #fff; }
+
         .btn-premium { 
             background: linear-gradient(135deg, var(--primary-blue), var(--primary-cyan));
             color: white;
             box-shadow: 0 10px 25px rgba(6, 182, 212, 0.3);
         }
+        
+        .btn-premium:hover:not(:disabled) { 
+            transform: scale(1.02);
+            filter: brightness(1.1);
+            box-shadow: 0 15px 35px rgba(6, 182, 212, 0.4);
+        }
 
-        .back-link { margin-top: 40px; color: #6b7280; text-decoration: none; font-size: 0.9rem; }
+        .save-tag {
+            color: #10b981;
+            font-size: 0.85rem;
+            font-weight: 700;
+            margin-bottom: 5px;
+            display: block;
+        }
+
+        .back-link {
+            margin-top: 40px;
+            color: #6b7280;
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: 0.3s;
+        }
+
+        .back-link:hover { color: var(--primary-cyan); }
+
+        @media (max-width: 992px) {
+            .pricing-card.featured { transform: scale(1); }
+            .pricing-grid { padding: 20px; }
+        }
     </style>
 </head>
 <body>
 
 <div class="container text-center mb-5">
-    <h1 class="fw-extrabold display-4 mb-3">Choose Your Edge</h1>
+    <h1 class="fw-extrabold display-4 mb-3" style="letter-spacing: -1px;">Choose Your Edge</h1>
     <p class="text-secondary lead">Institutional-grade risk management for retail traders.</p>
 </div>
 
 <div class="pricing-grid">
+    
     <div class="pricing-card">
         <div class="price-title">Starter</div>
         <div class="price-value">₹0<span>/mo</span></div>
+        <p class="small text-secondary">Essential trading tools</p>
+        
         <ul class="feature-list">
             <li><svg width="20" height="20" fill="currentColor" viewBox="0 0 20 20"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"></path></svg> 5 Trades Per Day</li>
+            <li><svg width="20" height="20" fill="currentColor" viewBox="0 0 20 20"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"></path></svg> Basic Size Calculator</li>
+            <li class="disabled"><svg width="20" height="20" fill="currentColor" viewBox="0 0 20 20"><path d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"></path></svg> API Automation</li>
+            <li class="disabled"><svg width="20" height="20" fill="currentColor" viewBox="0 0 20 20"><path d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"></path></svg> Priority WebSocket</li>
         </ul>
-        <a href="/" class="btn-plan" style="background: #1f2937; color: white;">Return to Home</a>
+        <a href="/index" class="btn-plan btn-free">Continue Free</a>
     </div>
 
     <div class="pricing-card featured">
         <div class="popular-badge">MOST POPULAR</div>
         <div class="price-title">Pro Yearly</div>
+        <span class="save-tag">SAVE ₹1,000 ANNUALLY</span>
         <div class="price-value">₹5000<span>/yr</span></div>
+        <p class="small text-secondary">The complete automation suite</p>
+        
         <ul class="feature-list">
             <li><svg width="20" height="20" fill="currentColor" viewBox="0 0 20 20"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"></path></svg> Unlimited Daily Trades</li>
+            <li><svg width="20" height="20" fill="currentColor" viewBox="0 0 20 20"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"></path></svg> Advanced Auto-Execution</li>
+            <li><svg width="20" height="20" fill="currentColor" viewBox="0 0 20 20"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"></path></svg> Multiple TP/SL Management</li>
+            <li><svg width="20" height="20" fill="currentColor" viewBox="0 0 20 20"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"></path></svg> 24/7 Priority Support</li>
         </ul>
         <button id="rzp-button-yearly" class="btn-plan btn-premium">Activate Annual Pro</button>
     </div>
@@ -140,13 +216,23 @@
     <div class="pricing-card">
         <div class="price-title">Pro Monthly</div>
         <div class="price-value">₹499<span>/mo</span></div>
+        <p class="small text-secondary">Flexible month-to-month</p>
+        
         <ul class="feature-list">
+            <li><svg width="20" height="20" fill="currentColor" viewBox="0 0 20 20"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"></path></svg> Unlimited Daily Trades</li>
             <li><svg width="20" height="20" fill="currentColor" viewBox="0 0 20 20"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"></path></svg> Full Automation Suite</li>
+            <li><svg width="20" height="20" fill="currentColor" viewBox="0 0 20 20"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"></path></svg> Real-time API Updates</li>
         </ul>
         <button id="rzp-button-monthly" class="btn-plan btn-premium">Get Monthly Pro</button>
     </div>
+
 </div>
 
+<a href="/home" class="back-link">← Return to Dashboard</a>
+
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 <script>
     async function handleSubscription(planType) {
@@ -158,7 +244,6 @@
         btn.disabled = true;
 
         try {
-            // 1. Create Subscription on Server
             const response = await fetch('/create-subscription', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -168,43 +253,34 @@
             const data = await response.json();
             if (!response.ok) throw new Error(data.error);
 
-            // 2. Open Razorpay Modal
-            const options = {
-                key: "{{ key_id }}",
-                subscription_id: data.subscription_id,
-                name: "PRO TRADING",
-                description: planType === 'yearly' ? "Annual Plan" : "Monthly Plan",
-                handler: async function (response) {
-                    // 3. Verify Payment with Backend (FIXES THE 404/ACCESS ISSUE)
-                    const verifyRes = await fetch('/verify-subscription', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            razorpay_payment_id: response.razorpay_payment_id,
-                            razorpay_subscription_id: response.razorpay_subscription_id,
-                            razorpay_signature: response.razorpay_signature
-                        })
-                    });
-                    
-                    const result = await verifyRes.json();
-                    if (result.success) {
-                        // 4. Redirect to dashboard only AFTER success verification
-                        window.location.href = "/index";
-                    } else {
-                        alert("Verification failed: " + result.error);
-                        btn.innerHTML = originalText;
-                        btn.disabled = false;
-                    }
-                },
-                prefill: { name: "{{ user.username }}", email: "{{ user.email }}" },
-                theme: { color: "#06b6d4" },
-                modal: {
-                    ondismiss: function() {
-                        btn.innerHTML = originalText;
-                        btn.disabled = false;
-                    }
-                }
-            };
+          // Replace the Razorpay options in subscribe.html with this:
+const options = {
+    key: "{{ key_id }}",
+    subscription_id: data.subscription_id,
+    name: "PRO TRADING",
+    description: planType === 'yearly' ? "Annual Plan" : "Monthly Plan",
+    handler: async function (response) {
+        // Send payment details to backend for verification
+        const verifyRes = await fetch('/verify-subscription', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_subscription_id: response.razorpay_subscription_id,
+                razorpay_signature: response.razorpay_signature
+            })
+        });
+        
+        const result = await verifyRes.json();
+        if (result.success) {
+            window.location.href = "/index"; // Redirect to dashboard on success
+        } else {
+            alert("Verification failed: " + result.error);
+        }
+    },
+    prefill: { name: "{{ user.username }}", email: "{{ user.email }}" },
+    theme: { color: "#06b6d4" }
+};
 
             const rzp = new Razorpay(options);
             rzp.open();

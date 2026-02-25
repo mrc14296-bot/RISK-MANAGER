@@ -13,6 +13,8 @@ import config
 import os
 import csv
 import io
+from flask import session
+import uuid
 
 # Import your User model (ensure models.py exists as provided previously)
 from models import db, User
@@ -52,6 +54,20 @@ google = oauth.register(
 # Razorpay Client Setup
 razorpay_client = razorpay.Client(auth=(config.RAZORPAY_KEY_ID, config.RAZORPAY_KEY_SECRET))
 
+
+def subscription_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated:
+            return redirect(url_for('login'))
+
+        if not current_user.is_subscribed:
+            flash("Please subscribe to access the dashboard.", "warning")
+            return redirect(url_for('pricing'))
+
+        return f(*args, **kwargs)
+    return decorated_function
+
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
@@ -86,6 +102,14 @@ def terms():
 def privacy():
     """Privacy Policy page"""
     return render_template('privacy.html')
+
+@app.route('/')
+def root():
+    if current_user.is_authenticated:
+        if current_user.subscription_end and current_user.subscription_end > datetime.utcnow():
+            return redirect('/index')
+        return redirect('/subscribe')
+    return redirect('/login')
 
 # --- AUTHENTICATION ROUTES ---
 
@@ -125,16 +149,37 @@ def register():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        user = User.query.filter_by(email=request.form.get('email')).first()
+        user = User.query.filter_by(
+            email=request.form.get('email')
+        ).first()
+
         if user and check_password_hash(user.password, request.form.get('password')):
+
+            if user.active_session:
+                flash(
+                    "This account is already logged in. Please logout first.",
+                    "error"
+                )
+                return redirect(url_for('login'))
+
+            session_id = str(uuid.uuid4())
+            session['session_id'] = session_id
+
+            user.active_session = session_id
+            db.session.commit()
+
             login_user(user)
-            # Redirect to /index. If they haven't paid, 
-            # @subscription_required will send them to /subscribe automatically.
-            return redirect(url_for('index')) 
-        
-        flash('Invalid login credentials', 'error')
+            return redirect(url_for('index'))
+
+        flash("Invalid email or password", "error")
+
     return render_template('login.html')
 
+@app.route('/index')
+@login_required
+@subscription_required
+def dashboard():
+    return render_template('index.html')
 
 @app.route('/login/google')
 def google_login():
@@ -160,6 +205,10 @@ def google_authorize():
 @app.route('/logout')
 @login_required
 def logout():
+    current_user.active_session = None
+    db.session.commit()
+
+    session.clear()
     logout_user()
     return redirect(url_for('login'))
 
@@ -229,20 +278,51 @@ def create_subscription():
 def verify_subscription():
     try:
         data = request.get_json()
-        # This checks the security signature from Razorpay
-        razorpay_client.utility.verify_subscription_payment_signature(data)
-        
-        # ✅ IMPORTANT: Update the user in the database
+
+        # 1️⃣ Verify Razorpay signature (SECURITY – DO NOT REMOVE)
+        razorpay_client.utility.verify_subscription_payment_signature({
+            "razorpay_payment_id": data.get("razorpay_payment_id"),
+            "razorpay_subscription_id": data.get("razorpay_subscription_id"),
+            "razorpay_signature": data.get("razorpay_signature")
+        })
+
+        # 2️⃣ Detect plan type (monthly / yearly)
+        subscription_id = data.get("razorpay_subscription_id")
+
+        if subscription_id == RAZORPAY_MONTHLY_PLAN_ID:
+            duration_days = 30
+            plan_type = "monthly"
+        elif subscription_id == RAZORPAY_YEARLY_PLAN_ID:
+            duration_days = 365
+            plan_type = "yearly"
+        else:
+            # fallback (safety)
+            duration_days = 30
+            plan_type = "monthly"
+
+        # 3️⃣ Update user subscription details
         current_user.is_subscribed = True
-        current_user.subscription_id = data.get('razorpay_subscription_id')
-        current_user.subscription_status = 'active'
-        current_user.subscription_end = datetime.utcnow() + timedelta(days=30)
-        
-        db.session.commit() # Save the change!
-        
-        return jsonify({'success': True})
+        current_user.subscription_id = subscription_id
+        current_user.subscription_status = "active"
+        current_user.subscription_type = plan_type
+        current_user.subscription_start = datetime.utcnow()
+        current_user.subscription_end = datetime.utcnow() + timedelta(days=duration_days)
+
+        # 4️⃣ Save to database
+        db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "plan": plan_type,
+            "valid_till": current_user.subscription_end.strftime("%Y-%m-%d")
+        })
+
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 400
+        db.session.rollback()
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 400
 
 @app.route('/check-subscription')
 @login_required
@@ -273,6 +353,7 @@ def check_subscription():
 
 @app.route("/get_live_price/<symbol>")
 @login_required
+@subscription_required
 def live_price_api(symbol):
     price = logic.get_live_price(symbol)
     return jsonify({"price": price if price else 0})
@@ -338,18 +419,22 @@ def download_trades():
 def subscription_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        # We check current_user.is_subscribed
-        # If it is False (default), they are kicked to the subscription page
-        if not getattr(current_user, 'is_subscribed', False):
-            flash("Please purchase a subscription to access the Trading Dashboard.", "warning")
+        if not current_user.is_authenticated:
+            return redirect(url_for('login'))
+
+        if not current_user.subscription_end:
             return redirect(url_for('subscribe'))
+
+        if current_user.subscription_end < datetime.utcnow():
+            return redirect(url_for('subscribe'))
+
         return f(*args, **kwargs)
     return decorated_function
 
 
 @app.route("/", methods=["GET", "POST"])
-@login_required          # MUST BE FIRST: Identify the user
-@subscription_required 
+@login_required
+@subscription_required
 def index():
     logic.initialize_session()
     symbols = logic.get_all_exchange_symbols()
