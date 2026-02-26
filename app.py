@@ -7,7 +7,8 @@ from datetime import datetime, timedelta
 from functools import wraps
 from flask import redirect, url_for, flash
 from flask_login import current_user
-
+from datetime import datetime, timedelta
+from models import db, User
 import logic
 import config
 import os
@@ -15,17 +16,14 @@ import csv
 import io
 from flask import session
 import uuid
-
-# Import your User model (ensure models.py exists as provided previously)
-from models import db, User
-
-# Import Razorpay
 import razorpay
 import hashlib
 import hmac
 
 app = Flask(__name__)
 app.secret_key = "trading_secret_key_ultra_secure_2025"
+
+
 
 # Database & Login Configuration
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///users.db').replace("postgres://", "postgresql://", 1)
@@ -40,7 +38,6 @@ db.init_app(app)
 login_manager = LoginManager()
 login_manager.login_view = 'login'
 login_manager.init_app(app)
-
 # Google OAuth Setup
 oauth = OAuth(app)
 google = oauth.register(
@@ -54,23 +51,35 @@ google = oauth.register(
 # Razorpay Client Setup
 razorpay_client = razorpay.Client(auth=(config.RAZORPAY_KEY_ID, config.RAZORPAY_KEY_SECRET))
 
+def get_month_end(dt=None):
+    if not dt:
+        dt = datetime.utcnow()
+    next_month = dt.replace(day=28) + timedelta(days=4)  # always goes to next month
+    return next_month.replace(day=1) - timedelta(seconds=1)
 
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
+# --- 2. THE GATEKEEPER (Checks Expiry Date) ---
 def subscription_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if not current_user.is_authenticated:
             return redirect(url_for('login'))
-
-        if not current_user.is_subscribed:
-            flash("Please subscribe to access the dashboard.", "warning")
-            return redirect(url_for('pricing'))
-
+        
+        # Check if subscription exists AND if it has expired
+        now = datetime.utcnow()
+        if not current_user.is_subscribed or (current_user.subscription_end and now > current_user.subscription_end):
+            # Auto-reset status if expired
+            if current_user.is_subscribed:
+                current_user.is_subscribed = False
+                db.session.commit()
+            
+            flash("Your subscription has expired. Please renew to access the dashboard.", "warning")
+            return redirect(url_for('subscribe'))
+            
         return f(*args, **kwargs)
     return decorated_function
-
-@login_manager.user_loader
-def load_user(user_id):
-    return User.query.get(int(user_id))
 
 # --- PUBLIC PAGES ---
 
@@ -142,34 +151,40 @@ def register():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        user = User.query.filter_by(
-            email=request.form.get('email')
-        ).first()
+        email = request.form.get('email')
+        password = request.form.get('password')
 
-        if user and check_password_hash(user.password, request.form.get('password')):
+        user = User.query.filter_by(email=email).first()
 
-            if user.active_session:
-                flash(
-                    "This account is already logged in. Please logout first.",
-                    "error"
-                )
-                return redirect(url_for('login'))
+        if not user or not check_password_hash(user.password, password):
+            flash("Invalid email or password", "error")
+            return render_template('login.html')
 
-            session_id = str(uuid.uuid4())
-            session['session_id'] = session_id
+        # 🔒 Block multiple logins
+        if user.active_session:
+            flash("This account is already logged in. Please logout first.", "error")
+            return redirect(url_for('login'))
 
-            user.active_session = session_id
-            db.session.commit()
+        # ✅ LOGIN USER
+        login_user(user)
 
-            login_user(user)
-            return redirect(url_for('index'))
+        # 🎁 FIRST LOGIN / TRIAL → VALID TILL MONTH END
+        if not user.subscription_end:
+            user.is_subscribed = True
+            user.subscription_type = "trial"
+            user.subscription_status = "active"
+            user.subscription_start = datetime.utcnow()
+            user.subscription_end = get_month_end()
 
-        flash("Invalid email or password", "error")
+        # 🔑 Track session
+        session_id = str(uuid.uuid4())
+        session['session_id'] = session_id
+        user.active_session = session_id
+
+        db.session.commit()
+        return redirect(url_for('index'))
 
     return render_template('login.html')
-
-
-
 def dashboard_defaults():
     return {
         "trade_status": None,
@@ -223,10 +238,10 @@ def logout():
     current_user.active_session = None
     db.session.commit()
 
-    session.clear()
     logout_user()
-    return redirect(url_for('login'))
+    session.pop('session_id', None)
 
+    return redirect(url_for('login'))
 
 # --- RAZORPAY SUBSCRIPTION ROUTES ---
 
@@ -321,7 +336,7 @@ def verify_subscription():
         current_user.subscription_status = "active"
         current_user.subscription_type = plan_type
         current_user.subscription_start = datetime.utcnow()
-        current_user.subscription_end = datetime.utcnow() + timedelta(days=duration_days)
+        current_user.subscription_end = get_month_end()
 
         # 4️⃣ Save to database
         db.session.commit()
