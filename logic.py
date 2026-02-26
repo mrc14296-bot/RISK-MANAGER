@@ -104,32 +104,43 @@ def initialize_session():
 
 
 def get_all_exchange_symbols():
-    """Get symbols with caching"""
+    """Get all USDT-margined trading symbols with caching"""
     global _symbol_cache, _symbol_cache_time
     current_time = time.time()
     
-    # Return cached symbols if still valid (1 hour cache)
+    # 1. Return cached symbols if valid (1 hour)
     if _symbol_cache and (current_time - _symbol_cache_time) < 3600:
         return _symbol_cache
     
     try:
         client = get_client()
         if client is None: 
-            return ["BTCUSDT", "ETHUSDT"]
+            raise Exception("Client not initialized")
         
+        # 2. Fetch all exchange info
         info = client.futures_exchange_info()
+        
+        # 3. Filter for USDT pairs that are currently TRADING
         symbols = sorted([
             s["symbol"] for s in info["symbols"] 
-            if s["status"] == "TRADING" and s["quoteAsset"] == "USDT"
+            if s["status"] == "TRADING" 
+            and s["quoteAsset"] == "USDT"
+            and s["contractType"] == "PERPETUAL"  # Ensures you get standard perpetuals
         ])
         
+        if not symbols:
+            raise Exception("No symbols found in API response")
+
         _symbol_cache = symbols
         _symbol_cache_time = current_time
+        print(f"✅ Loaded {len(symbols)} symbols from Binance")
         return symbols
-    except Exception as e:
-        print(f"Error getting symbols: {e}")
-        return _symbol_cache if _symbol_cache else ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT"]
 
+    except Exception as e:
+        print(f"❌ Error getting symbols: {e}")
+        # 4. Expanded Fallback List in case API fails
+        fallback = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "ADAUSDT", "AVAXUSDT", "DOTUSDT", "DOGEUSDT", "LINKUSDT"]
+        return _symbol_cache if _symbol_cache else fallback
 
 def get_live_balance():
     """Get live wallet balance and margin used"""

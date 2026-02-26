@@ -35,10 +35,10 @@
                 <div class="col">
                     <label>Symbol</label>
                     <select name="symbol" onchange="this.form.submit()">
-                        {% for sym in symbols %}
-                        <option value="{{sym}}" {{ 'selected' if sym == selected_symbol }}>{{sym}}</option>
-                        {% endfor %}
-                    </select>
+    {% for sym in symbols %}
+    <option value="{{sym}}" {{ 'selected' if sym == selected_symbol }}>{{sym}}</option>
+    {% endfor %}
+</select>
                 </div>
             </div>
 
