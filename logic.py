@@ -104,37 +104,40 @@ def initialize_session():
 
 
 def get_all_exchange_symbols():
-    """Get all USDT-margined trading symbols with caching"""
+    """Fetches all TRADING symbols paired with USDT dynamically from Binance"""
     global _symbol_cache, _symbol_cache_time
-    current_time = time.time()
+    now = time.time()
     
-    # 1. Return cached symbols if valid (1 hour)
-    if _symbol_cache and (current_time - _symbol_cache_time) < 3600:
+    # Check if we have a fresh cache (valid for 1 hour)
+    if _symbol_cache and (now - _symbol_cache_time < 3600):
         return _symbol_cache
-    
+
     try:
-        client = get_client()
-        if client is None: 
-            raise Exception("Client not initialized")
-        
-        # 2. Fetch all exchange info
+        client = get_client() # Uses your API keys from config
+        if not client:
+            raise Exception("Binance client not initialized")
+            
+        # Get all exchange information from Binance Futures
         info = client.futures_exchange_info()
         
-        # 3. Filter for USDT pairs that are currently TRADING
+        # Filter: Must be 'TRADING' status AND 'USDT' quote asset
         symbols = sorted([
-            s["symbol"] for s in info["symbols"] 
-            if s["status"] == "TRADING" 
-            and s["quoteAsset"] == "USDT"
-            and s["contractType"] == "PERPETUAL"  # Ensures you get standard perpetuals
+            s['symbol'] for s in info['symbols'] 
+            if s['status'] == 'TRADING' and s['quoteAsset'] == 'USDT'
         ])
         
         if not symbols:
-            raise Exception("No symbols found in API response")
-
+            raise Exception("No USDT symbols found")
+            
         _symbol_cache = symbols
-        _symbol_cache_time = current_time
-        print(f"✅ Loaded {len(symbols)} symbols from Binance")
+        _symbol_cache_time = now
+        print(f"✅ Dynamically loaded {len(symbols)} symbols.")
         return symbols
+
+    except Exception as e:
+        print(f"⚠️ Dynamic Fetch Error: {e}")
+        # Emergency Fallback so the dropdown isn't empty if the API is down
+        return ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT"]
 
     except Exception as e:
         print(f"❌ Error getting symbols: {e}")

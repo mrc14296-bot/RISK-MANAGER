@@ -63,27 +63,39 @@ def get_month_end(dt=None):
 def subscription_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        # 1. Check if user is logged in
         if not current_user.is_authenticated:
             return redirect(url_for('login'))
 
+        # 2. Check if admin has paused this specific user
         if current_user.is_paused:
-            flash("Subscription is paused. Contact admin.", "error")
-            return redirect(url_for('home'))
+            flash("Your access is paused. Please contact admin.", "error")
+            # If 'home' route doesn't exist, redirect to 'index' or 'login'
+            return redirect(url_for('login'))
 
+        # 3. Check for existence of a subscription end date
         if not current_user.subscription_end:
-            flash("No active subscription.", "warning")
-            return redirect(url_for('subscribe'))
+            flash("No active subscription found. Please subscribe.", "warning")
+            return redirect(url_for('subscription')) # Fixed route name
 
+        # 4. Check for Expiration (including Grace Period)
         now = datetime.utcnow()
-        # grace_end uses the GRACE_DAYS constant defined above
+        # Uses GRACE_DAYS = 3 defined in app.py
         grace_end = current_user.subscription_end + timedelta(days=GRACE_DAYS)
 
         if now > grace_end:
+            # Mark user as unsubscribed in the database
             current_user.is_subscribed = False
             current_user.subscription_status = "expired"
             db.session.commit()
-            flash("Subscription expired. Please renew.", "warning")
-            return redirect(url_for('subscribe'))
+            
+            flash("Your subscription has expired. Please renew to continue trading.", "warning")
+            return redirect(url_for('subscription')) # Fixed route name
+
+        # 5. Fallback check for the subscription flag
+        if not current_user.is_subscribed:
+            flash("Please activate your subscription.", "warning")
+            return redirect(url_for('subscription'))
 
         return f(*args, **kwargs)
     return decorated_function
@@ -401,6 +413,7 @@ def get_trade_history_api():
 @subscription_required
 def index():
     # 1. Initialize data
+
     logic.initialize_session()
     symbols = logic.get_all_exchange_symbols()
     live_bal, live_margin = logic.get_live_balance()
@@ -430,6 +443,8 @@ def index():
     # 3. Position Sizing
     sizing = logic.calculate_position_sizing(unutilized, entry, sl_type, sl_val)
     trade_status = session.pop("trade_status", None)
+
+   
 
     # 4. Handle Order Placement
     if request.method == "POST" and "place_order" in request.form:
