@@ -1,4 +1,3 @@
-
 from flask import Flask, render_template, request, session, jsonify, redirect, url_for, Response
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -6,9 +5,7 @@ from authlib.integrations.flask_client import OAuth
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 from functools import wraps
-from flask import redirect, url_for
-from pydoc import getpager
-from urllib.parse import urlparse, urljoin
+from flask import redirect, url_for, flash
 from flask_login import current_user
 from datetime import datetime, timedelta
 from models import db, User
@@ -26,15 +23,6 @@ import hmac
 app = Flask(__name__)
 app.secret_key = "trading_secret_key_ultra_secure_2025"
 
-
-
-def is_safe_url(target):
-    ref_url = urlparse(request.host_url)
-    test_url = urlparse(urljoin(request.host_url, target))
-    return (
-        test_url.scheme in ('http', 'https') and
-        ref_url.netloc == test_url.netloc
-    )
 
 # Database & Login Configuration
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///users.db').replace("postgres://", "postgresql://", 1)
@@ -94,19 +82,6 @@ def subscription_required(f):
             
         return f(*args, **kwargs)
     return decorated_function
-
-def has_active_subscription(user):
-    if not user.is_subscribed:
-        return False
-
-    if user.subscription_end and user.subscription_end > datetime.utcnow():
-        return True
-
-    # Auto-expire if date passed
-    user.is_subscribed = False
-    user.subscription_status = "expired"
-    db.session.commit()
-    return False
 
 # --- PUBLIC PAGES ---
 
@@ -174,6 +149,7 @@ def register():
             return redirect(url_for('login')) 
 
     return render_template('register.html')
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -194,13 +170,13 @@ def login():
         # ✅ LOGIN USER
         login_user(user)
 
-        # 🎁 FIRST LOGIN / TRIAL
-        if not user.subscription_end and not user.is_subscribed:
-         user.subscription_type = "trial"
-         user.subscription_status = "active"
-         user.subscription_start = datetime.utcnow()
-         user.subscription_end = get_month_end()
-         user.is_subscribed = True
+        # 🎁 FIRST LOGIN / TRIAL → VALID TILL MONTH END
+        if not user.subscription_end:
+            user.is_subscribed = True
+            user.subscription_type = "trial"
+            user.subscription_status = "active"
+            user.subscription_start = datetime.utcnow()
+            user.subscription_end = get_month_end()
 
         # 🔑 Track session
         session_id = str(uuid.uuid4())
@@ -208,21 +184,8 @@ def login():
         user.active_session = session_id
 
         db.session.commit()
+        return redirect(url_for('index'))
 
-        # ✅ SAFE NEXT PAGE HANDLING
-        next_page = request.args.get("next")
-
-        if next_page and is_safe_url(next_page):
-            if next_page != url_for('subscribe'):
-                return redirect(next_page)
-
-        # ✅ SUBSCRIPTION-AWARE DEFAULT
-        if has_active_subscription(user):
-            return redirect(url_for('index'))
-        else:
-            return redirect(url_for('subscribe'))
-
-    # GET request
     return render_template('login.html')
 def dashboard_defaults():
     return {
@@ -258,35 +221,18 @@ def google_login():
 def google_authorize():
     token = google.authorize_access_token()
     user_info = token.get('userinfo')
-
-    email = user_info['email']
-
-    # ✅ Always match by email first
-    user = User.query.filter_by(email=email).first()
-
-    if user:
-        # 🔗 Link Google account if not linked
-        if not user.google_id:
-            user.google_id = user_info['sub']
-            db.session.commit()
-    else:
-        # 🆕 Create user ONLY if email not found
+    user = User.query.filter_by(email=user_info['email']).first()
+    if not user:
         user = User(
-            username=user_info.get('name'),
-            email=email,
-            google_id=user_info['sub'],
-            is_subscribed=False
+            username=user_info['name'], 
+            email=user_info['email'], 
+            google_id=user_info['sub']
         )
         db.session.add(user)
         db.session.commit()
-
     login_user(user)
-
-    # ✅ Subscription-aware redirect
-    if has_active_subscription(user):
-        return redirect(url_for('index'))
-    else:
-        return redirect(url_for('subscribe'))
+    # Redirect to subscription page instead of index
+    return redirect(url_for('subscribe'))
 
 @app.route('/logout')
 @login_required
@@ -304,15 +250,8 @@ def logout():
 @app.route('/subscribe')
 @login_required
 def subscribe():
-    # 🔒 Prevent redirect loop
-    if has_active_subscription(current_user):
-        return redirect(url_for('index'))
-
-    return render_template(
-        'subscribe.html',
-        key_id=config.RAZORPAY_KEY_ID,
-        user=current_user
-    )
+    """Render subscription page with Razorpay key"""
+    return render_template('subscribe.html', key_id=config.RAZORPAY_KEY_ID, user=current_user)
 
 @app.route('/create-subscription', methods=['POST'])
 @login_required
@@ -436,10 +375,7 @@ def check_subscription():
         'status': 'inactive'
     })
 
-
 # --- ORIGINAL TRADING ROUTES ---
-
-
 
 @app.route("/get_live_price/<symbol>")
 @login_required
