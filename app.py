@@ -165,6 +165,9 @@ def login():
             flash("Invalid email or password", "error")
             return render_template('login.html')
 
+        # Log the user in using Flask-Login
+        login_user(user)
+
         # Block multiple logins
         if user.active_session:
             flash("This account is already logged in. Please logout first.", "error")

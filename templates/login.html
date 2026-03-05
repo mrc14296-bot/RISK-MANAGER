@@ -7,11 +7,24 @@
         body { background-color: #0b0e11; color: white; display: flex; align-items: center; justify-content: center; height: 100vh; }
         .login-card { background: #1e2329; padding: 30px; border-radius: 10px; width: 400px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
         .btn-google { background-color: white; color: black; border: none; }
+        .alert { padding: 10px; border-radius: 5px; margin-bottom: 15px; }
+        .alert-error { background-color: #dc3545; color: white; }
+        .alert-success { background-color: #28a745; color: white; }
+        .alert-warning { background-color: #ffc107; color: black; }
     </style>
 </head>
 <body>
     <div class="login-card">
         <h3 class="text-center mb-4">Risk Manager Login</h3>
+        
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
         <form method="POST">
             <div class="mb-3">
                 <input type="email" name="email" class="form-control" placeholder="Email" required>
