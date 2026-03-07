@@ -15,8 +15,3 @@ content = content.replace("fetch('/add-exchange', {\nPOST',\n                hea
 content = content.replace("fetch('/add-exchange', {\n                method:\n                body:", 
                           "fetch('/add-exchange', {\n                method: 'POST',\n                headers: { 'Content-Type': 'application/json' },\n                body:")
 
-with open('templates/exchange_connections.html', 'w', encoding='utf-8') as f:
-    f.write(content)
-
-print("Fixed exchange_connections.html!")
-
