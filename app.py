@@ -22,7 +22,7 @@ app.secret_key = "trading_secret_key_ultra_secure_2025"
 # Database & Login Configuration
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///users.db').replace("postgres://", "postgresql://", 1)
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SESSION_PERMANENT'] = False
+app.config['SESSION_PERMANENT'] = True
 
 # Get Plan IDs from config.py directly
 RAZORPAY_MONTHLY_PLAN_ID = config.RAZORPAY_MONTHLY_PLAN_ID
@@ -142,31 +142,11 @@ def login():
         email = request.form.get('email')
         password = request.form.get('password')
 
-        # Validate email and password are provided
-        if not email or not password:
-            flash("Email and password are required", "error")
-            return render_template('login.html')
-
-        # Normalize email to lowercase and strip whitespace
-        email = email.strip().lower()
-        
         user = User.query.filter_by(email=email).first()
 
-        # Check if user exists and has a password set
-        if not user:
+        if not user or not check_password_hash(user.password, password):
             flash("Invalid email or password", "error")
             return render_template('login.html')
-        
-        if not user.password:
-            flash("Please login with Google", "error")
-            return render_template('login.html')
-
-        if not check_password_hash(user.password, password):
-            flash("Invalid email or password", "error")
-            return render_template('login.html')
-
-        # Log the user in using Flask-Login
-        login_user(user)
 
         # Block multiple logins
         if user.active_session:
