@@ -14,12 +14,23 @@ import io
 import uuid
 import razorpay
 
+# Load environment variables
+load_dotenv()
+
 app = Flask(__name__)
-app.secret_key = "trading_secret_key_ultra_secure_2025"
+
+# Secure secret key - use environment variable or generate one
+app.secret_key = os.getenv('SECRET_KEY', os.urandom(32).hex())
+
+# Session configuration for persistent login
+app.config['SESSION_PERMANENT'] = True
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)
+app.config['SESSION_COOKIE_SECURE'] = os.getenv('SESSION_COOKIE_SECURE', 'False').lower() == 'true'
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///users.db').replace("postgres://", "postgresql://", 1)
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SESSION_PERMANENT'] = True
 
 RAZORPAY_MONTHLY_PLAN_ID = config.RAZORPAY_MONTHLY_PLAN_ID
 RAZORPAY_YEARLY_PLAN_ID = config.RAZORPAY_YEARLY_PLAN_ID
@@ -138,16 +149,22 @@ def login():
             flash("Invalid email or password", "error")
             return render_template('login.html')
 
-        if user.active_session:
-            flash("This account is already logged in. Please logout first.", "error")
-            return redirect(url_for('login'))
-
+        # FIXED: Allow multiple device login - removed restrictive active_session check
+        # Users can now log in from any device without being forced to logout first
+        
+        # Create session
+        login_user(user, remember=True)  # Added remember=True for persistent login
         session_id = str(uuid.uuid4())
         session['session_id'] = session_id
+        session.permanent = True  # Make session permanent
+        
+        # Clear any old active_session to allow fresh login
+        # Don't block login - just update the session
         user.active_session = session_id
 
         db.session.commit()
         
+        # Check subscription status
         if not user.is_subscribed or (user.subscription_end and datetime.utcnow() > user.subscription_end):
             if user.is_subscribed and user.subscription_end and datetime.utcnow() > user.subscription_end:
                 user.is_subscribed = False
@@ -182,14 +199,12 @@ def google_authorize():
         db.session.add(user)
         db.session.commit()
     
-    if user.active_session:
-        flash("This account is already logged in elsewhere. Please logout first.", "error")
-        return redirect(url_for('login'))
-    
-    login_user(user)
+    # FIXED: Allow multiple device login - removed restrictive active_session check
+    login_user(user, remember=True)
     
     session_id = str(uuid.uuid4())
     session['session_id'] = session_id
+    session.permanent = True
     user.active_session = session_id
     
     db.session.commit()
@@ -210,8 +225,19 @@ def logout():
     current_user.active_session = None
     db.session.commit()
     logout_user()
-    session.pop('session_id', None)
+    session.clear()
     return redirect(url_for('login'))
+
+# Debug route to clear stuck sessions - use in browser: /clear-session
+@app.route('/clear-session')
+def clear_session_debug():
+    """Debug route to clear all user sessions - for stuck users"""
+    from models import User
+    users = User.query.all()
+    for user in users:
+        user.active_session = None
+    db.session.commit()
+    return "All user sessions cleared! <a href='/login'>Go to Login</a>"
 
 @app.route('/subscribe')
 @login_required

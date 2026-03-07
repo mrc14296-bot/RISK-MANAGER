@@ -214,28 +214,51 @@ def get_live_balance(user_id=None):
         return None, None
 
 def get_live_price(symbol, user_id=None):
-    """Get live price with caching"""
+    """Get live price with caching - uses public API as fallback"""
     global _price_cache, _last_call_time
     current_time = time.time()
     
     cache_key = f"{symbol}_{user_id}" if user_id else symbol
     
+    # Check cache first (2 second cache)
     if cache_key in _price_cache and (current_time - _last_call_time) < 2:
         return _price_cache[cache_key]
     
     try:
+        # Try to get user's client first
         client = get_client(user_id)
-        if client is None:
+        
+        if client is not None:
+            # Use authenticated client
+            ticker = client.futures_symbol_ticker(symbol=symbol)
+            price = float(ticker['price'])
+            _price_cache[cache_key] = price
+            _last_call_time = current_time
+            return price
+        else:
+            # FIXED: Use public API as fallback - no API key needed for price fetching
+            try:
+                import requests
+                response = requests.get(
+                    f"https://fapi.binance.com/fapi/v1/ticker/price?symbol={symbol}",
+                    timeout=5
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    price = float(data['price'])
+                    _price_cache[cache_key] = price
+                    _last_call_time = current_time
+                    print(f"✅ Fetched {symbol} price from public API: {price}")
+                    return price
+            except Exception as api_err:
+                print(f"⚠️ Public API fallback failed: {api_err}")
+            
+            # Return cached price if available, otherwise 0
             return _price_cache.get(cache_key, 0)
-        
-        ticker = client.futures_symbol_ticker(symbol=symbol)
-        price = float(ticker['price'])
-        
-        _price_cache[cache_key] = price
-        _last_call_time = current_time
-        return price
+            
     except Exception as e:
         print(f"Error fetching price for {symbol}: {e}")
+        # Return cached price if available, otherwise 0
         return _price_cache.get(cache_key, 0)
 
 def get_symbol_filters(symbol, user_id=None):
