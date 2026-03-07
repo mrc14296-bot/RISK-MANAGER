@@ -129,7 +129,7 @@ def register():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        email = request.form.get('email')
+        email = request.form.get('email', '').strip().lower()  # Convert to lowercase
         password = request.form.get('password')
 
         user = User.query.filter_by(email=email).first()
@@ -168,12 +168,15 @@ def google_login():
 def google_authorize():
     token = google.authorize_access_token()
     user_info = token.get('userinfo')
-    user = User.query.filter_by(email=user_info['email']).first()
+    
+    # Convert email to lowercase to match registration format
+    email_lower = user_info['email'].lower()
+    user = User.query.filter_by(email=email_lower).first()
     
     if not user:
         user = User(
             username=user_info['name'], 
-            email=user_info['email'], 
+            email=email_lower, 
             google_id=user_info['sub']
         )
         db.session.add(user)
