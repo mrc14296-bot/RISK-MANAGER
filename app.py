@@ -13,19 +13,14 @@ import csv
 import io
 import uuid
 import razorpay
-import hashlib
-import hmac
-import json
 
 app = Flask(__name__)
 app.secret_key = "trading_secret_key_ultra_secure_2025"
 
-# Database & Login Configuration
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///users.db').replace("postgres://", "postgresql://", 1)
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SESSION_PERMANENT'] = True
 
-# Get Plan IDs from config.py directly
 RAZORPAY_MONTHLY_PLAN_ID = config.RAZORPAY_MONTHLY_PLAN_ID
 RAZORPAY_YEARLY_PLAN_ID = config.RAZORPAY_YEARLY_PLAN_ID
 
@@ -38,7 +33,6 @@ login_manager.init_app(app)
 def load_user(user_id):
     return User.query.get(int(user_id))
 
-# Google OAuth Setup
 oauth = OAuth(app)
 google = oauth.register(
     name='google',
@@ -48,7 +42,6 @@ google = oauth.register(
     client_kwargs={'scope': 'openid email profile'}
 )
 
-# Razorpay Client Setup
 razorpay_client = razorpay.Client(auth=(config.RAZORPAY_KEY_ID, config.RAZORPAY_KEY_SECRET))
 
 def get_month_end(dt=None):
@@ -57,7 +50,6 @@ def get_month_end(dt=None):
     next_month = dt.replace(day=28) + timedelta(days=4)
     return next_month.replace(day=1) - timedelta(seconds=1)
 
-# Subscription Required Decorator
 def subscription_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -77,10 +69,8 @@ def subscription_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# PUBLIC PAGES
 @app.route('/')
 def home():
-    "Public homepage"
     return render_template('home.html')
 
 @app.route('/home')
@@ -103,7 +93,6 @@ def terms():
 def privacy():
     return render_template('privacy.html')
 
-# AUTHENTICATION ROUTES
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
@@ -149,21 +138,17 @@ def login():
             flash("Invalid email or password", "error")
             return render_template('login.html')
 
-        # Block multiple logins
         if user.active_session:
             flash("This account is already logged in. Please logout first.", "error")
             return redirect(url_for('login'))
 
-        # Track session
         session_id = str(uuid.uuid4())
         session['session_id'] = session_id
         user.active_session = session_id
 
         db.session.commit()
         
-        # Check if user has active subscription - if not, redirect to subscribe
         if not user.is_subscribed or (user.subscription_end and datetime.utcnow() > user.subscription_end):
-            # Update subscription status if expired
             if user.is_subscribed and user.subscription_end and datetime.utcnow() > user.subscription_end:
                 user.is_subscribed = False
                 user.subscription_status = 'expired'
@@ -194,23 +179,19 @@ def google_authorize():
         db.session.add(user)
         db.session.commit()
     
-    # Check if already logged in elsewhere
     if user.active_session:
         flash("This account is already logged in elsewhere. Please logout first.", "error")
         return redirect(url_for('login'))
     
     login_user(user)
     
-    # Track session
     session_id = str(uuid.uuid4())
     session['session_id'] = session_id
     user.active_session = session_id
     
     db.session.commit()
     
-    # Check if user has active subscription - if not, redirect to subscribe
     if not user.is_subscribed or (user.subscription_end and datetime.utcnow() > user.subscription_end):
-        # Update subscription status if expired
         if user.is_subscribed and user.subscription_end and datetime.utcnow() > user.subscription_end:
             user.is_subscribed = False
             user.subscription_status = 'expired'
@@ -218,7 +199,6 @@ def google_authorize():
         flash("Please subscribe to access the trading dashboard.", "warning")
         return redirect(url_for('subscribe'))
     
-    # If subscription is active, go to dashboard
     return redirect(url_for('index'))
 
 @app.route('/logout')
@@ -230,17 +210,14 @@ def logout():
     session.pop('session_id', None)
     return redirect(url_for('login'))
 
-# SUBSCRIPTION ROUTES
 @app.route('/subscribe')
 @login_required
 def subscribe():
-    """Render subscription page"""
     return render_template('subscribe.html', key_id=config.RAZORPAY_KEY_ID, user=current_user)
 
 @app.route('/create-subscription', methods=['POST'])
 @login_required
 def create_subscription():
-    """Create a Razorpay subscription"""
     try:
         data = request.get_json()
         plan_type = data.get("plan_type")
@@ -284,7 +261,6 @@ def verify_subscription():
     try:
         data = request.get_json()
 
-        # Verify Razorpay signature
         razorpay_client.utility.verify_subscription_payment_signature({
             "razorpay_payment_id": data.get("razorpay_payment_id"),
             "razorpay_subscription_id": data.get("razorpay_subscription_id"),
@@ -294,7 +270,6 @@ def verify_subscription():
         plan_type = session.pop("pending_plan_type", "monthly")
         duration_days = 365 if plan_type == "yearly" else 30
 
-        # Update user subscription
         current_user.is_subscribed = True
         current_user.subscription_id = data.get("razorpay_subscription_id")
         current_user.subscription_status = "active"
@@ -317,16 +292,13 @@ def verify_subscription():
 @app.route('/cancel-subscription', methods=['POST'])
 @login_required
 def cancel_subscription():
-    """Cancel user's subscription"""
     try:
         if current_user.subscription_id:
-            # Cancel on Razorpay
             try:
                 razorpay_client.subscription.cancel(current_user.subscription_id)
             except Exception as e:
                 print(f"Razorpay cancellation error: {e}")
         
-        # Update user record
         current_user.is_subscribed = False
         current_user.subscription_status = "cancelled"
         current_user.subscription_end = datetime.utcnow()
@@ -348,7 +320,6 @@ def cancel_subscription():
 @app.route('/check-subscription')
 @login_required
 def check_subscription():
-    """Check user's subscription status"""
     if current_user.is_subscribed:
         if current_user.subscription_end and current_user.subscription_end > datetime.utcnow():
             days_left = (current_user.subscription_end - datetime.utcnow()).days
@@ -369,15 +340,12 @@ def check_subscription():
     return jsonify({'subscribed': False, 'status': 'inactive'})
 
 
-# =============================================================================
-# EXCHANGE CONNECTION ROUTES - Let users connect their own exchange accounts
-# =============================================================================
+# EXCHANGE CONNECTION ROUTES
 
 @app.route('/exchange-connections')
 @login_required
 @subscription_required
 def exchange_connections():
-    """Show user's connected exchanges"""
     connections = ExchangeConnection.query.filter_by(user_id=current_user.id).all()
     return render_template(
         'exchange_connections.html',
@@ -390,7 +358,6 @@ def exchange_connections():
 @login_required
 @subscription_required
 def add_exchange():
-    """Add a new exchange connection"""
     try:
         data = request.get_json()
         exchange_type = data.get('exchange_type')
@@ -398,16 +365,13 @@ def add_exchange():
         api_secret = data.get('api_secret', '').strip()
         connection_name = data.get('connection_name', '').strip()
         
-        # Validate exchange type
         if exchange_type not in config.SUPPORTED_EXCHANGES:
             return jsonify({'success': False, 'error': 'Invalid exchange type'}), 400
         
-        # Check required fields
         required_fields = config.SUPPORTED_EXCHANGES[exchange_type]['api_required']
         if not api_key or not api_secret:
             return jsonify({'success': False, 'error': f'Missing required fields: {", ".join(required_fields)}'}), 400
         
-        # Check if already connected
         existing = ExchangeConnection.query.filter_by(
             user_id=current_user.id,
             exchange_type=exchange_type,
@@ -417,20 +381,18 @@ def add_exchange():
         if existing:
             return jsonify({'success': False, 'error': f'You already have a {exchange_type} connection. Please disconnect it first.'}), 400
         
-        # Create new connection
         connection = ExchangeConnection(
             user_id=current_user.id,
             exchange_type=exchange_type,
             api_key=api_key,
             api_secret=api_secret,
             connection_name=connection_name or f"My {exchange_type} Account",
-            is_connected=False  # Will be verified
+            is_connected=False
         )
         
         db.session.add(connection)
         db.session.commit()
         
-        # Try to verify the connection
         if exchange_type == 'binance':
             from binance.client import Client
             try:
@@ -440,7 +402,6 @@ def add_exchange():
                 connection.last_verified = datetime.utcnow()
                 db.session.commit()
                 
-                # Clear any cached client
                 logic.clear_user_client(current_user.id)
                 
                 return jsonify({'success': True, 'message': f'{exchange_type} connected successfully!'})
@@ -449,7 +410,6 @@ def add_exchange():
                 db.session.commit()
                 return jsonify({'success': False, 'error': f'Failed to connect: {str(e)}'}), 400
         
-        # For other exchanges, just save and mark as pending verification
         connection.is_connected = True
         connection.last_verified = datetime.utcnow()
         db.session.commit()
@@ -465,10 +425,8 @@ def add_exchange():
 @login_required
 @subscription_required
 def verify_exchange(connection_id):
-    """Verify an exchange connection"""
     connection = ExchangeConnection.query.get_or_404(connection_id)
     
-    # Make sure it belongs to the current user
     if connection.user_id != current_user.id:
         return jsonify({'success': False, 'error': 'Unauthorized'}), 403
     
@@ -483,7 +441,6 @@ def verify_exchange(connection_id):
                 connection.last_verified = datetime.utcnow()
                 db.session.commit()
                 
-                # Clear cached client
                 logic.clear_user_client(current_user.id)
                 
                 return jsonify({'success': True, 'message': 'Connection verified successfully!'})
@@ -502,18 +459,14 @@ def verify_exchange(connection_id):
 @login_required
 @subscription_required
 def disconnect_exchange(connection_id):
-    """Disconnect an exchange"""
     connection = ExchangeConnection.query.get_or_404(connection_id)
     
-    # Make sure it belongs to the current user
     if connection.user_id != current_user.id:
         return jsonify({'success': False, 'error': 'Unauthorized'}), 403
     
     try:
-        # Clear user's cached client
         logic.clear_user_client(current_user.id)
         
-        # Delete the connection
         db.session.delete(connection)
         db.session.commit()
         
@@ -528,7 +481,6 @@ def disconnect_exchange(connection_id):
 @login_required
 @subscription_required
 def get_exchange_status():
-    """Get current user's exchange connection status"""
     connections = ExchangeConnection.query.filter_by(
         user_id=current_user.id,
         is_connected=True
@@ -544,26 +496,28 @@ def get_exchange_status():
         } for c in connections]
     })
 
-# TRADING ROUTES - ALL PROTECTED WITH subscription_required
+
+# TRADING ROUTES - All use user's connected exchange via user_id
+
 @app.route("/get_live_price/<symbol>")
 @login_required
 @subscription_required
 def live_price_api(symbol):
-    price = logic.get_live_price(symbol)
+    price = logic.get_live_price(symbol, current_user.id)
     return jsonify({"price": price if price else 0})
 
 @app.route("/get_open_positions")
 @login_required
 @subscription_required
 def get_open_positions_api():
-    positions = logic.get_open_positions()
+    positions = logic.get_open_positions(current_user.id)
     return jsonify({"positions": positions})
 
 @app.route("/get_trade_history")
 @login_required
 @subscription_required
 def get_trade_history_api():
-    trades = logic.get_trade_history()
+    trades = logic.get_trade_history(current_user.id)
     return jsonify({"trades": trades})
 
 @app.route("/get_today_stats")
@@ -577,7 +531,7 @@ def get_today_stats_api():
 @login_required
 @subscription_required
 def close_position_api(symbol):
-    result = logic.close_position(symbol)
+    result = logic.close_position(symbol, current_user.id)
     return jsonify(result)
 
 @app.route("/partial_close", methods=["POST"])
@@ -590,7 +544,7 @@ def partial_close_api():
     close_qty = data.get('close_qty')
     if not symbol:
         return jsonify({"success": False, "message": "Symbol required"})
-    result = logic.partial_close_position(symbol, close_percent, close_qty)
+    result = logic.partial_close_position(symbol, close_percent, close_qty, current_user.id)
     return jsonify(result)
 
 @app.route("/update_sl", methods=["POST"])
@@ -602,14 +556,14 @@ def update_sl_api():
     new_sl_percent = float(data.get('new_sl_percent', 0))
     if not symbol:
         return jsonify({"success": False, "message": "Symbol required"})
-    result = logic.update_stop_loss(symbol, new_sl_percent)
+    result = logic.update_stop_loss(symbol, new_sl_percent, current_user.id)
     return jsonify(result)
 
 @app.route("/download_trades")
 @login_required
 @subscription_required
 def download_trades():
-    trades = logic.get_trade_history()
+    trades = logic.get_trade_history(current_user.id)
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(['Time (UTC)', 'Symbol', 'Side', 'Quantity', 'Price', 'Realized PnL', 'Commission', 'Order ID'])
@@ -626,8 +580,8 @@ def download_trades():
 @subscription_required
 def index():
     logic.initialize_session()
-    symbols = logic.get_all_exchange_symbols()
-    live_bal, live_margin = logic.get_live_balance()
+    symbols = logic.get_all_exchange_symbols(current_user.id)
+    live_bal, live_margin = logic.get_live_balance(current_user.id)
 
     balance = live_bal or 0.0
     margin_used = live_margin or 0.0
@@ -638,7 +592,7 @@ def index():
     order_type = request.form.get("order_type", "MARKET")
     margin_mode = request.form.get("margin_mode", "ISOLATED")
 
-    entry = float(request.form.get("entry") or logic.get_live_price(selected_symbol) or 0)
+    entry = float(request.form.get("entry") or logic.get_live_price(selected_symbol, current_user.id) or 0)
     sl_type = request.form.get("sl_type", "SL % Movement")
     sl_val = float(request.form.get("sl_value") or 0)
 
@@ -653,7 +607,7 @@ def index():
         result = logic.execute_trade_action(
             balance, selected_symbol, side, entry, order_type, sl_type, sl_val, sizing,
             float(request.form.get("user_units") or 0), float(request.form.get("user_lev") or 0),
-            margin_mode, tp1, tp1_pct, tp2
+            margin_mode, tp1, tp1_pct, tp2, current_user.id
         )
         session["trade_status"] = result
         session.modified = True
@@ -682,7 +636,6 @@ def index():
         today_stats=today_stats
     )
 
-# Database initialization
 with app.app_context():
     db.create_all()
 
