@@ -62,63 +62,32 @@ def get_user_exchange_client(user_id):
             {'timeout': 20, 'requests_params': requests_params}
         )
         
-        # Verify the connection works (with geo-error handling)
-        try:
-            client.futures_account(recvWindow=60000)
-        except BinanceAPIException as e:
-            error_msg = str(e)
-            if 'restricted location' in error_msg.lower() or 'eligibility' in error_msg.lower():
-                raise Exception(f"🌍 Binance geo-restriction detected: {error_msg}. Use VPN/proxy (US/Singapore server) from allowed location.")
-            raise
-        
-        # Cache the client
-        _user_clients[user_id] = client
-        return client
-        
-    except Exception as e:
-        print(f"❌ Error creating user client: {e}")
-        # Mark connection as failed
-        connection.is_connected = False
-        from models import db
-        db.session.commit()
-        return None
-    
-    # Check if we already have a cached client for this user
-    if user_id in _user_clients:
-        return _user_clients[user_id]
-    
-    # Get user's exchange connection from database
-    connection = ExchangeConnection.query.filter_by(
-        user_id=user_id, 
-        exchange_type='binance',
-        is_connected=True
-    ).first()
-    
-    if not connection or not connection.api_key or not connection.api_secret:
-        return None
-    
-    try:
-        # Create client with user's API keys
-        client = Client(
-            connection.api_key,
-            connection.api_secret,
-            {'timeout': 20}
-        )
-        
         # Verify the connection works
         client.futures_account(recvWindow=60000)
         
+        print(f"✅ User {user_id} Binance client created successfully")
         # Cache the client
         _user_clients[user_id] = client
         return client
         
-    except Exception as e:
-        print(f"❌ Error creating user client: {e}")
+    except BinanceAPIException as e:
+        error_info = config.BINANCE_ERROR_CODES.get(e.code)
+        print(f"❌ BinanceAPIException for user {user_id}: code={e.code}, {error_info['title'] if error_info else str(e)}")
         # Mark connection as failed
         connection.is_connected = False
         from models import db
         db.session.commit()
         return None
+        
+    except Exception as e:
+        print(f"❌ Unexpected error creating client for user {user_id}: {e}")
+        # Mark connection as failed
+        connection.is_connected = False
+        from models import db
+        db.session.commit()
+        return None
+    
+# REMOVED DUPLICATE CODE - use proxy-aware version above
 
 
 def set_user_client(user_id, client):
@@ -278,12 +247,19 @@ def get_live_balance(user_id=None):
     try:
         client = get_client(user_id)
         if client is None: 
+            print(f"⚠️ No client available for balance check (user_id={user_id})")
             return None, None
         
         acc = client.futures_account(recvWindow=10000)
-        return float(acc["totalWalletBalance"]), float(acc["totalInitialMargin"])
+        balance = float(acc["totalWalletBalance"])
+        margin = float(acc["totalInitialMargin"])
+        print(f"💰 Balance fetched: ${balance:.2f}, Margin: ${margin:.2f}")
+        return balance, margin
+    except BinanceAPIException as e:
+        print(f"❌ Binance error getting balance (user_id={user_id}): {config.BINANCE_ERROR_CODES.get(e.code, {}).get('title', str(e))}")
+        return None, None
     except Exception as e:
-        print(f"Error getting balance: {e}")
+        print(f"Error getting balance (user_id={user_id}): {e}")
         return None, None
 
 def get_live_price(symbol, user_id=None):

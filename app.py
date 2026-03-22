@@ -497,6 +497,17 @@ def add_exchange():
         
         if exchange_type == 'binance':
             from binance.client import Client
+            from binance.exceptions import BinanceAPIException
+            
+            # Validate key format first
+            if not (api_key.startswith(('vmPU', 'uD')) and len(api_key) > 20):
+                db.session.delete(connection)
+                db.session.commit()
+                return jsonify({
+                    'success': False, 
+                    'error': 'Invalid API key format. Binance keys start with vmPU... or uD... (64+ chars)'
+                }), 400
+            
             try:
                 client = Client(api_key, api_secret, {'timeout': 20})
                 client.futures_account(recvWindow=60000)
@@ -507,10 +518,21 @@ def add_exchange():
                 logic.clear_user_client(current_user.id)
                 
                 return jsonify({'success': True, 'message': f'{exchange_type} connected successfully!'})
+            except BinanceAPIException as e:
+                error_info = config.BINANCE_ERROR_CODES.get(e.code)
+                db.session.delete(connection)
+                db.session.commit()
+                return jsonify({
+                    'success': False,
+                    'error_code': getattr(e, 'code', None),
+                    'title': error_info['title'] if error_info else f'Binance Error {e.code}',
+                    'message': error_info['message'] if error_info else str(e),
+                    'raw_error': str(e)
+                }), 400
             except Exception as e:
                 db.session.delete(connection)
                 db.session.commit()
-                return jsonify({'success': False, 'error': f'Failed to connect: {str(e)}'}), 400
+                return jsonify({'success': False, 'error': f'Unexpected error: {str(e)}'}), 400
         
         connection.is_connected = True
         connection.last_verified = datetime.utcnow()
@@ -535,6 +557,8 @@ def verify_exchange(connection_id):
     try:
         if connection.exchange_type == 'binance':
             from binance.client import Client
+            from binance.exceptions import BinanceAPIException
+            
             try:
                 client = Client(connection.api_key, connection.api_secret, {'timeout': 20})
                 client.futures_account(recvWindow=60000)
@@ -546,10 +570,21 @@ def verify_exchange(connection_id):
                 logic.clear_user_client(current_user.id)
                 
                 return jsonify({'success': True, 'message': 'Connection verified successfully!'})
+            except BinanceAPIException as e:
+                error_info = config.BINANCE_ERROR_CODES.get(e.code)
+                connection.is_connected = False
+                db.session.commit()
+                return jsonify({
+                    'success': False,
+                    'error_code': getattr(e, 'code', None),
+                    'title': error_info['title'] if error_info else f'Binance Error {e.code}',
+                    'message': error_info['message'] if error_info else str(e),
+                    'raw_error': str(e)
+                }), 400
             except Exception as e:
                 connection.is_connected = False
                 db.session.commit()
-                return jsonify({'success': False, 'error': f'Verification failed: {str(e)}'}), 400
+                return jsonify({'success': False, 'error': f'Unexpected error: {str(e)}'}), 400
         
         return jsonify({'success': True, 'message': 'Connection is active'})
         

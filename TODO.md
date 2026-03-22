@@ -1,15 +1,18 @@
-# Binance Geo-Restriction Fix - Implementation Plan
-Status: ✅ In Progress
+# Binance API Fix - Error -2015 & Balance/Price Issues
+Status: ✅ In Progress by BLACKBOXAI
 
 ## Steps:
-- [x] 1. Create TODO.md ✅
-- [x] 2. Update logic.py with proxy support & geo-error handling ✅
-- [ ] 3. Add /test-binance route to app.py + PROXY_URL in config.py
-- [ ] 4. Test VPN connectivity: `python -c "import requests; print(requests.get('https://fapi.binance.com/fapi/v1/time').json())"`
-- [ ] 5. Restart app (`python app.py`), test /debug-status & /test-binance
-- [ ] 6. Mark complete
+- [x] 1. Add BINANCE_ERROR_CODES mapping to config.py
+- [x] 2. Enhance app.py /add-exchange & /verify-exchange with specific error handling
+- [x] 3. Fix logic.py get_user_exchange_client() with BinanceAPIException handling
+- [ ] 4. Add diagnostics to balance/price endpoints
+- [ ] 5. Test: Invalid keys → clear errors, valid keys → balance/prices work
+- [ ] 6. Update TODO.md ✅ COMPLETE
 
-**Next:** config.py & app.py updates.
+## Root Causes Fixed:
+- ❌ Error -2015: Invalid key/IP/permissions → Specific user guidance
+- ❌ No balance/prices: Client auth fails silently → Better error propagation
+- ✅ Google Cloud: US IP → No geo-restriction expected
 
-**Primary Fix:** Use VPN (US/Singapore server). Proxy support added via config.PROXY_URL (e.g., 'http://proxy-server:port').
+**Next**: User MUST whitelist Google Cloud IP on Binance OR use their personal keys.
 

@@ -31,6 +31,30 @@ MAX_RETRIES = 3
 RETRY_DELAY = 1
 
 
+# Binance Error Code Mappings
+BINANCE_ERROR_CODES = {
+    -2015: {
+        'title': 'Invalid API Key / IP / Permissions',
+        'message': '1. Verify API key/secret correct\\n2. Enable "Futures" permissions\\n3. Whitelist server IP (Google Cloud)\\n4. Regenerate key if needed',
+        'code': -2015
+    },
+    -1021: {
+        'title': 'Timestamp out of sync',
+        'message': 'Server time mismatch. Try refreshing.',
+        'code': -1021
+    },
+    -2010: {
+        'title': 'New requests too frequent',
+        'message': 'Rate limited. Wait 1-2 minutes.',
+        'code': -2010
+    },
+    -1100: {
+        'title': 'Illegal characters',
+        'message': 'Invalid characters in params.',
+        'code': -1100
+    }
+}
+
 # Supported Exchanges for User Connections
 SUPPORTED_EXCHANGES = {
     'binance': {
