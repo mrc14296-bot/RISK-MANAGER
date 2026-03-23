@@ -499,14 +499,15 @@ def add_exchange():
             from binance.client import Client
             from binance.exceptions import BinanceAPIException
             
-            # Validate key format first
-            if not (api_key.startswith(('vmPU', 'uD')) and len(api_key) > 20):
-                db.session.delete(connection)
-                db.session.commit()
-                return jsonify({
-                    'success': False, 
-                    'error': 'Invalid API key format. Binance keys start with vmPU... or uD... (64+ chars)'
-                }), 400
+            # Basic key validation (now optional - comment shows expected format)
+            # if not (api_key.startswith(('vmPU', 'uD')) and len(api_key) > 20):
+            #     db.session.delete(connection)
+            #     db.session.commit()
+            #     return jsonify({
+            #         'success': False, 
+            #         'error': 'Invalid API key format. Binance keys start with vmPU... or uD... (64+ chars)'
+            #     }), 400
+            print(f"🔑 API Key length: {len(api_key)}, starts with: {api_key[:10]}...")
             
             try:
                 client = Client(api_key, api_secret, {'timeout': 20})

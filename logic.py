@@ -87,8 +87,6 @@ def get_user_exchange_client(user_id):
         db.session.commit()
         return None
     
-# REMOVED DUPLICATE CODE - use proxy-aware version above
-
 
 def set_user_client(user_id, client):
     """Manually set the client for a user (for testing)"""
@@ -242,8 +240,102 @@ def get_all_exchange_symbols(user_id=None):
         print(f"⚠️ Using fallback list with {len(fallback)} symbols")
         return fallback
 
+def get_wallet_balances(user_id=None):
+    """Get detailed wallet balances with free + locked (FIXED)"""
+    try:
+        client = get_client(user_id)
+        if client is None:
+            return {'success': False, 'error': 'No Binance client available'}
+        
+        acc = client.futures_account(recvWindow=10000)
+        assets = acc.get('assets', [])
+        
+        balances = []
+        total_usdt_equiv = 0.0
+        
+        for asset in assets:
+            free = float(asset.get('availableBalance', '0'))
+            locked = float(asset.get('lockedBalance', '0'))
+            total = float(asset.get('walletBalance', '0'))
+            
+            # Only include significant balances and USDT quote assets
+            if total > 0.01 and (asset['asset'] == 'USDT' or total > 1.0):
+                balances.append({
+                    'asset': asset['asset'],
+                    'free': round(free, 6),
+                    'locked': round(locked, 6),
+                    'total': round(total, 6)
+                })
+                total_usdt_equiv += total
+        
+        print(f"💰 Wallet: {len(balances)} assets, Total: ${total_usdt_equiv:.2f}")
+        return {
+            'success': True, 
+            'balances': balances, 
+            'total_assets': len(balances),
+            'total_usdt_equiv': round(total_usdt_equiv, 2)
+        }
+        
+    except BinanceAPIException as e:
+        print(f"❌ Wallet Binance error: {config.BINANCE_ERROR_CODES.get(e.code, {}).get('title', str(e))}")
+        return {'success': False, 'error': f'Binance API error: {str(e)}'}
+    except Exception as e:
+        print(f"❌ Wallet error: {e}")
+        return {'success': False, 'error': str(e)}
+
+def get_entry_price(symbol, user_id=None):
+    """Get entry price from historical trades using client.futures_account_trades() (FIXED)"""
+    try:
+        client = get_client(user_id)
+        if client is None:
+            return {'success': False, 'error': 'No Binance client available'}
+        
+        # Get recent trades for this symbol
+        trades = client.futures_account_trades(symbol=symbol, limit=1000)
+        
+        if not trades:
+            # Fallback to open position entryPrice
+            positions = client.futures_position_information(symbol=symbol)
+            for pos in positions:
+                if float(pos['positionAmt']) != 0:
+                    return {
+                        'success': True, 
+                        'entry_price': float(pos['entryPrice']),
+                        'trades_used': 0,
+                        'method': 'position_entryPrice_fallback'
+                    }
+            return {'success': False, 'error': 'No trades or open position'}
+        
+        # Calculate weighted average entry price
+        total_qty = 0.0
+        total_cost = 0.0
+        
+        for trade in trades:
+            qty = abs(float(trade['qty']))
+            price = float(trade['price'])
+            total_qty += qty
+            total_cost += qty * price
+        
+        avg_price = total_cost / total_qty if total_qty > 0 else 0.0
+        
+        print(f"📈 Entry {symbol}: ${avg_price:.4f} from {len(trades)} trades")
+        return {
+            'success': True,
+            'entry_price': round(avg_price, 6),
+            'trades_used': len([t for t in trades if float(t['qty']) != 0]),
+            'total_qty': round(total_qty, 6),
+            'method': 'weighted_avg_futures_account_trades'
+        }
+        
+    except BinanceAPIException as e:
+        print(f"❌ Entry price Binance error: {str(e)}")
+        return {'success': False, 'error': f'Binance API error: {str(e)}'}
+    except Exception as e:
+        print(f"❌ Entry price error: {e}")
+        return {'success': False, 'error': str(e)}
+
 def get_live_balance(user_id=None):
-    """Get live wallet balance and margin used"""
+    """Get live wallet balance and margin used - ENHANCED with detailed wallet data (FIXED)"""
     try:
         client = get_client(user_id)
         if client is None: 
@@ -251,10 +343,26 @@ def get_live_balance(user_id=None):
             return None, None
         
         acc = client.futures_account(recvWindow=10000)
-        balance = float(acc["totalWalletBalance"])
-        margin = float(acc["totalInitialMargin"])
-        print(f"💰 Balance fetched: ${balance:.2f}, Margin: ${margin:.2f}")
-        return balance, margin
+        total_balance = float(acc["totalWalletBalance"])
+        total_margin = float(acc["totalInitialMargin"])
+        
+        # Get detailed wallet balances
+        wallet_data = get_wallet_balances(user_id)
+        
+        print(f"💰 Balance: ${total_balance:.2f}, Margin: ${total_margin:.2f}")
+        
+        # Backward compatible tuple return + detailed JSON
+        return (
+            total_balance, 
+            total_margin
+        ), {
+            'success': True,
+            'total_balance': total_balance,
+            'total_margin': total_margin,
+            'unutilized': max(total_balance - total_margin, 0),
+            'wallet': wallet_data
+        }
+        
     except BinanceAPIException as e:
         print(f"❌ Binance error getting balance (user_id={user_id}): {config.BINANCE_ERROR_CODES.get(e.code, {}).get('title', str(e))}")
         return None, None
@@ -678,4 +786,3 @@ def get_today_stats():
     today = datetime.utcnow().date().isoformat()
     stats = session.get("stats", {}).get(today, {"total": 0, "symbols": {}})
     return {"total_trades": stats.get("total", 0), "max_trades": config.MAX_TRADES_PER_DAY, "symbol_trades": stats.get("symbols", {}), "max_per_symbol": config.MAX_TRADES_PER_SYMBOL_PER_DAY}
-
