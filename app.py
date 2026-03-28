@@ -31,8 +31,7 @@ app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
 raw_db_url = os.getenv('DATABASE_URL', None)
 if raw_db_url:
-    # Try psycopg v3 first
-    app.config['SQLALCHEMY_DATABASE_URI'] = raw_db_url.replace('postgres://', 'postgresql+psycopg://', 1)
+    app.config['SQLALCHEMY_DATABASE_URI'] = raw_db_url.replace("postgres://", "postgresql://", 1)
 else:
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///instance/app.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
