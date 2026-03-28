@@ -18,8 +18,13 @@ load_dotenv()
 
 app = Flask(__name__)
 
-# Secure secret key - use environment variable or generate one
-app.secret_key = os.getenv('SECRET_KEY', os.urandom(32).hex())
+from models import db, User, ExchangeConnection, SubscriptionHistory
+
+db.init_app(app)
+
+# later in file
+with app.app_context():
+    db.create_all()
 
 # Session configuration for persistent login
 app.config['SESSION_PERMANENT'] = True
@@ -58,9 +63,6 @@ login_manager.login_view = 'login'
 login_manager.init_app(app)
 
 # DB init moved after routes to avoid startup crash
-with app.app_context():
-    from models import db, User, ExchangeConnection, SubscriptionHistory
-    db.create_all()
 
 @login_manager.user_loader
 def load_user(user_id):

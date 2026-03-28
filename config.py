@@ -11,8 +11,8 @@ BINANCE_SECRET = os.getenv('BINANCE_SECRET', '')
 PROXY_URL = os.getenv('PROXY_URL', None)  # e.g., 'http://127.0.0.1:8080' or 'socks5://proxy:port'
 
 # Razorpay Configuration
-RAZORPAY_KEY_ID = os.getenv('RAZORPAY_KEY_ID', 'rzp_live_SK0QFnXQv9Ed4b') 
-RAZORPAY_KEY_SECRET = os.getenv('RAZORPAY_KEY_SECRET', 'y5QeUePyOVDeqN0fGOeH6FSo')
+RAZORPAY_KEY_ID = os.getenv('RAZORPAY_KEY_ID') 
+RAZORPAY_KEY_SECRET = os.getenv('RAZORPAY_KEY_SECRET')
 
 # Correct Plan IDs
 RAZORPAY_MONTHLY_PLAN_ID = os.getenv('RAZORPAY_MONTHLY_PLAN_ID', "plan_SK10d2Fpo8noaR")
