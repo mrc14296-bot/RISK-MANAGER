@@ -30,7 +30,11 @@ app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
 
 db_url = os.getenv('DATABASE_URL', None)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///app.db' if not db_url else db_url.replace("postgres://", "postgresql+psycopg3://", 1)
+
+if db_url:
+    db_url = db_url.replace("postgresql://", "postgresql+psycopg://", 1)
+
+app.config['SQLALCHEMY_DATABASE_URI'] = db_url or 'sqlite:///app.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 import os
@@ -56,7 +60,6 @@ login_manager.init_app(app)
 # DB init moved after routes to avoid startup crash
 with app.app_context():
     from models import db, User, ExchangeConnection, SubscriptionHistory
-    db.init_app(app)
     db.create_all()
 
 @login_manager.user_loader
@@ -901,6 +904,7 @@ def test_binance():
         }), 500
 
 
+
 if __name__ == "__main__":
-    port = int(os.getenv('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=False)
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
