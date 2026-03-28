@@ -10,3 +10,4 @@ gunicorn==21.2.0
 
 python-binance==1.0.32
 razorpay
+psycopg2-binary==2.9.9
