@@ -1,16 +1,38 @@
-# Auto-Sync Entry Price with Live Price
-## Status: ✅ In Progress (BLACKBOXAI)
+# Deployment Fix Progress
+Status: ✅ Steps 1-2 Completed
 
-### Plan Summary
-Ensure entry price input always reflects live price on load + continuous 1s sync, with visual indicator.
+## Completed Steps
+- [x] Step 1: Updated requirements.txt → psycopg3 (fixes ImportError on Render/Python 3.14)
+- [x] Step 2: Suppressed Binance warning print in app.py (cleans logs)
 
-### Steps (Completed: ~~strikethrough~~)
-- [x] **Step 1**: Create this TODO.md
-- [x] **Step 2**: Update logic.py - Reduce price cache to 1s ✅
-- [x] **Step 3**: app.py already fresh - no change needed ✅
-- [x] **Step 4**: Enhance templates/index.html - LIVE indicator + Reset + visuals ✅
-- [x] **Step 5**: Verified (1s auto-sync + LIVE badge pulses + 🔄 button works) ✅
-- [x] **Step 6**: Complete ✅
+## Remaining Steps (User Actions)
+1. **Commit & Push**: 
+   ```
+   git add .
+   git commit -m "Fix Render deploy: psycopg3 + suppress Binance warning"
+   git push origin main
+   ```
+2. **Render Dashboard**:
+   - Confirm `DATABASE_URL` set (postgres://... from Render PostgreSQL)
+   - Optional: Add `BINANCE_API_KEY`, `BINANCE_SECRET_KEY`
+   - **Manual Redeploy** (Deployments tab → Redeploy)
+3. **Test**:
+   - Check Render logs: No ImportError, no Binance warning
+   - Visit /debug-status → `{"database": "connected", ...}`
+   - Test login: /login → test@test.com / Test@123 (create via /create-admin)
+4. **Local Test** (optional):
+   ```
+   set DATABASE_URL=postgresql://user:pass@localhost/db  # or your local DB
+   pip install -r requirements.txt
+   python app.py
+   ```
 
-**Completed**: ✅ All steps done
+## Expected Results
+- ✅ Render deploys successfully
+- ✅ No psycopg2 ImportError
+- ✅ No Binance warning spam
+- ✅ Login/register works (DB connected)
+- ✅ /debug-status shows 'database': 'connected'
+
+Ping when Render logs are clean & login works!
 

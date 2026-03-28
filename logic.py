@@ -22,53 +22,45 @@ CACHE_DURATION = 5
 _user_clients = {}
 
 def get_user_exchange_client(user_id):
-    """
-    Get Binance client for a specific user based on their connected exchange.
-    Includes Proxy support to bypass Render geo-restrictions.
-    """
     from models import ExchangeConnection
-    import config  
+    import config
+    import time
 
-    # 1. Check if we already have a cached client for this user
+    # Check cache
     if user_id in _user_clients:
         return _user_clients[user_id]
     
-    # 2. Get user's exchange connection from database
     connection = ExchangeConnection.query.filter_by(
-        user_id=user_id, 
-        exchange_type='binance',
-        is_connected=True
+        user_id=user_id, exchange_type='binance', is_connected=True
     ).first()
     
-    if not connection or not connection.api_key or not connection.api_secret:
-        return None
-    
+    if not connection: return None
+
     try:
-        # 3. Setup Proxy from config.py (Render Environment Variable)
-        # Format must be: http://user:pass@ip:port
+        # 1. Sync time first
+        time_offset = sync_time_with_binance()
+        
+        # 2. Setup Proxy
         proxies = {
             'http': config.PROXY_URL,
             'https': config.PROXY_URL
-        } if config.PROXY_URL else None
+        } if getattr(config, 'PROXY_URL', None) else None
 
-        # 4. Initialize Binance Client with Proxy settings
+        # 3. Create Client
         client = Client(
             connection.api_key, 
             connection.api_secret,
             requests_params={'proxies': proxies} if proxies else None
         )
         
-        # 5. Sync timestamp to prevent -1021 errors
-        server_time = client.get_server_time()
-        client.timestamp_offset = server_time['serverTime'] - int(time.time() * 1000)
-        
-        # Cache and return
+        # 4. Apply offset to fix -1021 error
+        if abs(time_offset) > 100:
+            client.timestamp_offset = time_offset
+            
         _user_clients[user_id] = client
         return client
-
     except Exception as e:
-        print(f"❌ Binance Connection Error for user {user_id}: {e}")
-        traceback.print_exc()
+        print(f"❌ Connection Error: {e}")
         return None
 
 def set_user_client(user_id, client):

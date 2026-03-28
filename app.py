@@ -39,8 +39,7 @@ api_key = os.environ.get('BINANCE_API_KEY')
 api_secret = os.environ.get('BINANCE_SECRET_KEY')
 
 # Example safety check (optional but recommended)
-if not api_key or not api_secret:
-    print("Warning: Binance API keys are not set in the environment!")
+# if not api_key or not api_secret:\n#     print("Warning: Binance API keys are not set in the environment!")
 
 # Pass these to your Binance client initialization
 # client = Client(api_key, api_secret)
