@@ -5,7 +5,6 @@ from authlib.integrations.flask_client import OAuth
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 from functools import wraps
-from models import db, User, ExchangeConnection, SubscriptionHistory
 import logic
 import config
 import os
@@ -49,6 +48,8 @@ api_secret = os.environ.get('BINANCE_SECRET_KEY')
 RAZORPAY_MONTHLY_PLAN_ID = config.RAZORPAY_MONTHLY_PLAN_ID
 RAZORPAY_YEARLY_PLAN_ID = config.RAZORPAY_YEARLY_PLAN_ID
 
+# Initialize DB after app config
+from models import db, User, ExchangeConnection, SubscriptionHistory
 db.init_app(app)
 login_manager = LoginManager()
 login_manager.login_view = 'login'
@@ -897,4 +898,5 @@ def test_binance():
 
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    port = int(os.getenv('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=False)
