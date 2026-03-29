@@ -555,12 +555,13 @@ def verify_exchange(connection_id):
             
             try:
                 # Setup proxy if configured
+                # Inside add_exchange route in app.py
                 proxies = {'http': config.PROXY_URL, 'https': config.PROXY_URL} if getattr(config, 'PROXY_URL', None) else None
                 client = Client(
-                    connection.api_key, 
-                    connection.api_secret,
-                    requests_params={'proxies': proxies, 'timeout': 20} if proxies else {'timeout': 20}
-                )
+                     api_key, 
+                     api_secret, 
+                  requests_params={'proxies': proxies} if proxies else None
+                 )
                 
                 client.futures_account(recvWindow=60000)
                 
