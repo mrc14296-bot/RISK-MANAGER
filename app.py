@@ -728,22 +728,17 @@ def index():
     
     # --- FIXED BALANCE UNPACKING LOGIC ---
    # --- RE-FIXED BALANCE UNPACKING ---
+    # The logic.py returns a tuple (numbers) and a dict (details)
     balance_result = logic.get_live_balance(current_user.id)
-    balance = 0.0
-    margin_used = 0.0
 
-    if balance_result:
-    # Safely get the tuple (balance, margin) from the first part of the return
-        stats_tuple = balance_result[0]
-    if stats_tuple and len(stats_tuple) >= 2:
-        balance = float(stats_tuple[0] or 0.0)
-        margin_used = float(stats_tuple[1] or 0.0)
-        
-# If the above still fails, try the dictionary part of the return as a backup
-    if balance == 0.0 and len(balance_result) > 1:
-       details = balance_result[1]
-       balance = float(details.get('total_balance', 0.0))
-       margin_used = float(details.get('total_margin', 0.0))
+# Unpack carefully to avoid the 'tuple and dict' error
+    if balance_result and balance_result[0] is not None:
+       balance_tuple = balance_result[0] # This is (total_balance, total_margin)
+       balance = float(balance_tuple[0])
+       margin_used = float(balance_tuple[1])
+    else:
+       balance = 0.0
+       margin_used = 0.0
 
     unutilized = max(balance - margin_used, 0.0)
 # -----------------------------------
