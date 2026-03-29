@@ -70,8 +70,9 @@ RAZORPAY_YEARLY_PLAN_ID = config.RAZORPAY_YEARLY_PLAN_ID
 login_manager = LoginManager()
 login_manager.login_view = 'login'
 login_manager.init_app(app)
+db.init_app(app)
 
-# DB init moved after routes to avoid startup crash
+# DB now properly initialized
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -825,8 +826,7 @@ def index():
         today_stats=today_stats
     )
 
-with app.app_context():
-    db.create_all()
+db.create_all()
 
 # ============================================
 # ERROR HANDLERS - Add these after app creation

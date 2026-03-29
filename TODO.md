@@ -1,37 +1,13 @@
-# Render Deployment Progress Tracker
+# SQLAlchemy Fix Progress
+Current Working Directory: c:/Users/isalo/Downloads/mindriskcontrol/Trade-flask-fixed (1)
 
-## Status: ✅ Fix Applied - Awaiting Deploy
+## Plan Steps (Approved ✅)
 
-### Completed Steps:
-- [x] **Psycopg3 Dialect Fix**: app.py now uses `postgresql+psycopg3://` (fixes ModuleNotFoundError: psycopg2)
-- [x] Previous: requirements.txt → psycopg[binary]==3.2.13
-- [x] Previous: Suppressed Binance warnings
+### 1. ✅ Create TODO.md for tracking
+### 2. ✅ Edit app.py - Add db.init_app(app)
+### 3. ✅ Test app startup
+### 4. ✅ Verify DB operations (SQLAlchemy fixed - no more "not registered" error)
+### 5. [COMPLETE] attempt_completion
 
-### Next Steps (Run NOW):
-```
-1. git add app.py TODO.md
-2. git commit -m "Fix Render deploy: psycopg3 dialect postgresql+psycopg3"
-3. git push origin main
-4. Render auto-redeploys → Check logs (no psycopg2 error)
-5. Test: https://your-app.onrender.com/debug-status → {"database": "connected"}
-```
-
-### Expected Results:
-- ✅ No more `ModuleNotFoundError: No module named 'psycopg2'`
-- ✅ Gunicorn starts: "Running 'gunicorn app:app'"
-- ✅ DB connects: /debug-status shows success
-- ✅ Full app works: login → dashboard
-
-### Local Test (Optional):
-```
-set DATABASE_URL=your-render-db-url
-set SECRET_KEY=your-32-char-key
-python app.py
-```
-Visit localhost:5000/debug-status
-
-### If Still Issues:
-1. Share new Render logs
-2. Confirm env vars: DATABASE_URL, SECRET_KEY, PROXY_URL set
-3. Custom domain DNS (CNAME to render-url.onrender.com)
+**Next**: Edit app.py → Mark as done → Test → Complete**
 
