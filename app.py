@@ -17,27 +17,10 @@ import razorpay
 # Load environment variables
 load_dotenv()
 
-
-
 app = Flask(__name__)
 
-import os
-
-# Consolidated Database Configuration
-db_url = os.getenv("DATABASE_URL")
-if not db_url:
-    raise ValueError("❌ DATABASE_URL is not set in environment variables")
-
-# Fix for Render postgres:// issue
-if db_url.startswith("postgres://"):
-    db_url = db_url.replace("postgres://", "postgresql://", 1)
-
-# Use psycopg2 for PostgreSQL
-if db_url.startswith("postgresql://"):
-    db_url = db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
-
-app.config['SQLALCHEMY_DATABASE_URI'] = db_url or 'sqlite:///app.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+# Secure secret key - use environment variable or generate one
+app.secret_key = os.getenv('SECRET_KEY', os.urandom(32).hex())
 
 # Session configuration for persistent login
 app.config['SESSION_PERMANENT'] = True
@@ -46,28 +29,16 @@ app.config['SESSION_COOKIE_SECURE'] = os.getenv('SESSION_COOKIE_SECURE', 'False'
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
-
-
-# Fetch the keys from the environment
-api_key = os.environ.get('BINANCE_API_KEY')
-api_secret = os.environ.get('BINANCE_SECRET_KEY')
-
-# Example safety check (optional but recommended)
-# if not api_key or not api_secret:\n#     print("Warning: Binance API keys are not set in the environment!")
-
-# Pass these to your Binance client initialization
-# client = Client(api_key, api_secret)
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///users.db').replace("postgres://", "postgresql://", 1)
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 RAZORPAY_MONTHLY_PLAN_ID = config.RAZORPAY_MONTHLY_PLAN_ID
 RAZORPAY_YEARLY_PLAN_ID = config.RAZORPAY_YEARLY_PLAN_ID
 
-# Initialize DB later after all imports (lazy init)
+db.init_app(app)
 login_manager = LoginManager()
 login_manager.login_view = 'login'
 login_manager.init_app(app)
-db.init_app(app)
-
-# DB now properly initialized
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -524,15 +495,51 @@ def add_exchange():
         db.session.add(connection)
         db.session.commit()
         
-        # Test connection using logic module (handles proxy/time sync)
-        if logic.get_client(current_user.id):
-            connection.is_connected = True
-            connection.last_verified = datetime.utcnow()
-            db.session.commit()
-            logic.clear_user_client(current_user.id)  # Clear cache to refresh
-            return jsonify({'success': True, 'message': f'{exchange_type} connected successfully!'})
-        else:
-            return jsonify({'success': False, 'error': 'Connection test failed - check API keys/permissions'}), 400
+        if exchange_type == 'binance':
+            from binance.client import Client
+            from binance.exceptions import BinanceAPIException
+            
+            # Basic key validation (now optional - comment shows expected format)
+            # if not (api_key.startswith(('vmPU', 'uD')) and len(api_key) > 20):
+            #     db.session.delete(connection)
+            #     db.session.commit()
+            #     return jsonify({
+            #         'success': False, 
+            #         'error': 'Invalid API key format. Binance keys start with vmPU... or uD... (64+ chars)'
+            #     }), 400
+
+            
+            try:
+                client = Client(api_key, api_secret, {'timeout': 20})
+                client.futures_account(recvWindow=60000)
+                connection.is_connected = True
+                connection.last_verified = datetime.utcnow()
+                db.session.commit()
+                
+                logic.clear_user_client(current_user.id)
+                
+                return jsonify({'success': True, 'message': f'{exchange_type} connected successfully!'})
+            except BinanceAPIException as e:
+                error_info = config.BINANCE_ERROR_CODES.get(e.code)
+                db.session.delete(connection)
+                db.session.commit()
+                return jsonify({
+                    'success': False,
+                    'error_code': getattr(e, 'code', None),
+                    'title': error_info['title'] if error_info else f'Binance Error {e.code}',
+                    'message': error_info['message'] if error_info else str(e),
+                    'raw_error': str(e)
+                }), 400
+            except Exception as e:
+                db.session.delete(connection)
+                db.session.commit()
+                return jsonify({'success': False, 'error': f'Unexpected error: {str(e)}'}), 400
+        
+        connection.is_connected = True
+        connection.last_verified = datetime.utcnow()
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': f'{exchange_type} added successfully!'})
         
     except Exception as e:
         db.session.rollback()
@@ -554,15 +561,7 @@ def verify_exchange(connection_id):
             from binance.exceptions import BinanceAPIException
             
             try:
-                # Setup proxy if configured
-                # Inside add_exchange route in app.py
-                proxies = {'http': config.PROXY_URL, 'https': config.PROXY_URL} if config.PROXY_URL else None
-                client = Client(
-                    connection.api_key, 
-                    connection.api_secret,
-                requests_params={'proxies': proxies} if proxies else None
-                 )
-                
+                client = Client(connection.api_key, connection.api_secret, {'timeout': 20})
                 client.futures_account(recvWindow=60000)
                 
                 connection.is_connected = True
@@ -572,7 +571,6 @@ def verify_exchange(connection_id):
                 logic.clear_user_client(current_user.id)
                 
                 return jsonify({'success': True, 'message': 'Connection verified successfully!'})
-                
             except BinanceAPIException as e:
                 error_info = config.BINANCE_ERROR_CODES.get(e.code)
                 connection.is_connected = False
@@ -728,21 +726,24 @@ def download_trades():
 def index():
     logic.initialize_session()
     symbols = logic.get_all_exchange_symbols(current_user.id)
-    
-    # --- FIXED BALANCE UNPACKING LOGIC ---
-    balance_data = logic.get_live_balance(current_user.id)
-    balance = 0.0
-    margin_used = 0.0
+    live_bal, live_margin = logic.get_live_balance(current_user.id)
 
-    if balance_data and isinstance(balance_data, tuple):
-        # logic.py returns ((bal, margin), details_dict)
-        inner_tuple = balance_data[0]
-        if isinstance(inner_tuple, tuple) and len(inner_tuple) >= 2:
-            balance = float(inner_tuple[0] or 0.0)
-            margin_used = float(inner_tuple[1] or 0.0)
-    
+ # Updated to handle (tuple, dict) return from logic.py
+balance_data = logic.get_live_balance(current_user.id)
+
+# Check if we got a valid response (not None)
+if balance_data and isinstance(balance_data, tuple) and len(balance_data) >= 1:
+    # balance_data[0] is the (total_balance, total_margin) tuple
+        inner_balance_tuple = balance_data[0]
+    if isinstance(inner_balance_tuple, tuple):
+         balance = float(inner_balance_tuple[0])
+         margin_used = float(inner_balance_tuple[1])
+    else:
+         balance, margin_used = 0.0, 0.0
+    else:  
+         balance, margin_used = 0.0, 0.0
+
     unutilized = max(balance - margin_used, 0.0)
-    # -------------------------------------
 
     selected_symbol = request.form.get("symbol", "BTCUSDT")
     side = request.form.get("side", "LONG")
@@ -767,6 +768,7 @@ def index():
             margin_mode, tp1, tp1_pct, tp2, current_user.id
         )
         session["trade_status"] = result
+        session.modified = True
         return redirect(url_for("index"))
     
     today_stats = logic.get_today_stats()
@@ -882,7 +884,5 @@ def test_binance():
         }), 500
 
 
-
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host='0.0.0.0', port=5000, debug=True)
