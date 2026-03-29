@@ -17,13 +17,19 @@ import razorpay
 # Load environment variables
 load_dotenv()
 
-import os
+
 
 app = Flask(__name__)
 
+import os
+
 db_url = os.getenv("DATABASE_URL")
 
-if db_url and db_url.startswith("postgres://"):
+if not db_url:
+    raise ValueError("❌ DATABASE_URL is not set in environment variables")
+
+# Fix for Render postgres:// issue
+if db_url.startswith("postgres://"):
     db_url = db_url.replace("postgres://", "postgresql://", 1)
 
 app.config['SQLALCHEMY_DATABASE_URI'] = db_url
