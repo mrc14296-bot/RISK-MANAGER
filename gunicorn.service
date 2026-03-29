@@ -1,0 +1,31 @@
+[Unit]
+Description=gunicorn daemon for MindRiskControl Flask app
+Documentation=https://mindriskcontrol.com
+After=network.target
+
+[Service]
+Type=notify
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/mindriskcontrol
+Environment=\"PATH=/var/www/mindriskcontrol/venv/bin:/usr/local/bin:/usr/bin:/bin\"
+Environment=\"PYTHONPATH=/var/www/mindriskcontrol\"
+
+ExecStartPre=/bin/mkdir -p /var/lib/flask /var/log/mindriskcontrol
+ExecStartPre=/bin/chown -R www-data:www-data /var/lib/flask /var/www/mindriskcontrol /var/log/mindriskcontrol
+
+ExecStart=/var/www/mindriskcontrol/venv/bin/gunicorn \\
+  --config /var/www/mindriskcontrol/gunicorn.conf.py \\
+  --pid /run/gunicorn.pid \\
+  --access-logfile /var/log/mindriskcontrol/access.log \\
+  --error-logfile /var/log/mindriskcontrol/error.log \\
+  app:app
+
+ExecReload=/bin/kill -s HUP $MAINPID
+KillMode=mixed
+TimeoutStopSec=30
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+
