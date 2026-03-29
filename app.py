@@ -5,6 +5,7 @@ from authlib.integrations.flask_client import OAuth
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 from functools import wraps
+from models import db, User, ExchangeConnection, SubscriptionHistory
 import logic
 import config
 import os
@@ -16,15 +17,17 @@ import razorpay
 # Load environment variables
 load_dotenv()
 
+import os
+
 app = Flask(__name__)
 
-from models import db, User, ExchangeConnection, SubscriptionHistory
+db_url = os.getenv("DATABASE_URL")
 
-db.init_app(app)
+if db_url and db_url.startswith("postgres://"):
+    db_url = db_url.replace("postgres://", "postgresql://", 1)
 
-# later in file
-with app.app_context():
-    db.create_all()
+app.config['SQLALCHEMY_DATABASE_URI'] = db_url
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Session configuration for persistent login
 app.config['SESSION_PERMANENT'] = True
@@ -42,7 +45,7 @@ if db_url:
 app.config['SQLALCHEMY_DATABASE_URI'] = db_url or 'sqlite:///app.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-import os
+
 
 # Fetch the keys from the environment
 api_key = os.environ.get('BINANCE_API_KEY')
