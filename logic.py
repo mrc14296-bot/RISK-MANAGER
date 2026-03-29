@@ -26,7 +26,6 @@ def get_user_exchange_client(user_id):
     import config
     import time
 
-    # Check cache
     if user_id in _user_clients:
         return _user_clients[user_id]
     
@@ -34,35 +33,34 @@ def get_user_exchange_client(user_id):
         user_id=user_id, exchange_type='binance', is_connected=True
     ).first()
     
-    if not connection: return None
+    if not connection:
+        return None
 
     try:
-        # 1. Sync time first
+        # Get sync offset
         time_offset = sync_time_with_binance()
         
-        # 2. Setup Proxy
+        # Setup Proxy correctly
         proxies = {
             'http': config.PROXY_URL,
             'https': config.PROXY_URL
         } if getattr(config, 'PROXY_URL', None) else None
 
-        # 3. Create Client
+        # Create Client using the Render Proxy URL
         client = Client(
             connection.api_key, 
             connection.api_secret,
             requests_params={'proxies': proxies} if proxies else None
         )
         
-        # 4. Apply offset to fix -1021 error
-        if abs(time_offset) > 100:
+        if isinstance(time_offset, int) and abs(time_offset) > 100:
             client.timestamp_offset = time_offset
             
         _user_clients[user_id] = client
         return client
     except Exception as e:
-        print(f"❌ Connection Error: {e}")
+        print(f"❌ Proxy Connection Failed: {e}")
         return None
-
 def set_user_client(user_id, client):
     """Manually set the client for a user (for testing)"""
     _user_clients[user_id] = client
