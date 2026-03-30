@@ -21,17 +21,6 @@ CACHE_DURATION = 5
 # User-specific client storage
 _user_clients = {}
 
-# NEW: Stablecoins for USDT equiv (1:1 rate)
-STABLECOINS = {'USDT', 'USDC', 'BUSD', 'FDUSD', 'TUSD'}
-
-def invalidate_user_cache(user_id=None):
-    """Force clear cached client after dashboard connect/disconnect - PRODUCTION FIX"""
-    print(f"[CACHE] Invalidating cache for user_id={user_id}")
-    if user_id and user_id in _user_clients:
-        del _user_clients[user_id]
-    global _default_client
-    _default_client = None  # Force full refresh
-
 def get_user_exchange_client(user_id):
     """
     Get Binance client for a specific user based on their connected exchange.
@@ -40,9 +29,6 @@ def get_user_exchange_client(user_id):
     from models import ExchangeConnection
     import config  
 
-    # NEW: Force cache invalidation for fresh connect
-    invalidate_user_cache(user_id)
-    
     # Check if we already have a cached client for this user
     if user_id in _user_clients:
         return _user_clients[user_id]
@@ -55,7 +41,6 @@ def get_user_exchange_client(user_id):
     ).first()
     
     if not connection or not connection.api_key or not connection.api_secret:
-        print(f"[CLIENT] No connection found for user {user_id}")
         return None
     
     try:
@@ -150,13 +135,10 @@ def get_client(user_id=None):
     """
     Get or create Binance client with error handling.
     If user_id is provided, tries to use user's connected exchange.
+    Otherwise uses default config.
     """
     global _default_client
     import config 
-    
-    # PRODUCTION FIX: Always invalidate before getting client
-    if user_id:
-        invalidate_user_cache(user_id)
     
     # If user_id provided, try to get user's own exchange
     if user_id:
@@ -170,6 +152,7 @@ def get_client(user_id=None):
             if config.BINANCE_KEY and config.BINANCE_SECRET and len(config.BINANCE_KEY) > 5:
                 time_offset = sync_time_with_binance()
                 
+                # CRITICAL FIX: Properly bundle parameters into requests_params
                 req_params = {'timeout': 20}
                 
                 if hasattr(config, 'PROXY_URL') and config.PROXY_URL:
@@ -238,47 +221,26 @@ def get_all_exchange_symbols(user_id=None):
         
     return ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT"]
 
-def get_wallet_balances(user_id=None, estimate_usdt=True):
-    """PRODUCTION READY: Get detailed wallet balances (>0 only) with robust error handling"""
-    print(f"[WALLET] Fetching for user_id={user_id}, estimate={estimate_usdt}")
-    
+def get_wallet_balances(user_id=None):
+    """Get detailed wallet balances (only > 0)"""
     try:
-        # FORCE REFRESH POST-CONNECT
-        invalidate_user_cache(user_id)
-        
         client = get_client(user_id)
         if client is None:
-            return {
-                'success': False, 
-                'error_type': 'NoClient',
-                'error': f'No Binance client available for user {user_id}. Connect via dashboard.',
-                'user_id': user_id
-            }
+            return {'success': False, 'error': 'No Binance client available'}
         
         acc = client.futures_account(recvWindow=10000)
-        
-        # VALIDATE RESPONSE
-        assets = acc.get('assets')
-        if not assets or not isinstance(assets, list):
-            return {
-                'success': False,
-                'error_type': 'InvalidResponse',
-                'error': 'Invalid futures_account response - no assets list',
-                'raw': {'assets_type': type(assets), 'assets_len': len(assets) if assets else 0}
-            }
+        assets = acc.get('assets', [])
         
         balances = []
         total_usdt_equiv = 0.0
         
         for asset in assets:
-            # SAFE FLOAT CONVERSION - handles strings properly
-            free = float(asset.get('availableBalance') or '0')
-            locked = float(asset.get('lockedBalance') or '0')
-            total = float(asset.get('walletBalance') or '0')
+            free = float(asset.get('availableBalance', 0))
+            locked = float(asset.get('lockedBalance', 0))
+            total = float(asset.get('walletBalance', 0))
             
-            # ONLY COINS > 0 (per requirements)
             if total > 0:
-                asset_name = asset.get('asset', 'UNKNOWN').upper()
+                asset_name = asset.get('asset', '')
                 balances.append({
                     'asset': asset_name,
                     'free': round(free, 6),
@@ -286,47 +248,22 @@ def get_wallet_balances(user_id=None, estimate_usdt=True):
                     'total': round(total, 6)
                 })
                 
-                # USDT EQUIVALENT - PRODUCTION ENHANCED
-                if asset_name in STABLECOINS:
-                    total_usdt_equiv += total  # 1:1
-                elif estimate_usdt:
-                    # Fast estimate - only major pairs
-                    live_price = get_live_price(f"{asset_name}USDT", user_id)
-                    if live_price and live_price > 0:
-                        total_usdt_equiv += total * live_price
-                    # Skip illiquid alts (no price = no equiv)
+                if asset_name == 'USDT':
+                    total_usdt_equiv += total
                 else:
-                    # Full price fetch (slower)
                     live_price = get_live_price(f"{asset_name}USDT", user_id)
                     if live_price:
-                        total_usdt_equiv += total * live_price
+                        total_usdt_equiv += (total * live_price)
         
-        result = {
+        return {
             'success': True, 
             'balances': balances, 
             'total_assets': len(balances),
-            'total_usdt_equiv': round(total_usdt_equiv, 2),
-            'user_id': user_id
+            'total_usdt_equiv': round(total_usdt_equiv, 2)
         }
-        print(f"[WALLET] Success: {len(balances)} assets, ${result['total_usdt_equiv']}")
-        return result
         
-    except BinanceAPIException as e:
-        return {
-            'success': False,
-            'error_type': f'API:{e.code}',
-            'error': str(e),
-            'code': e.code,
-            'user_id': user_id
-        }
     except Exception as e:
-        print(f"[WALLET ERROR user={user_id}] {e}")
-        return {
-            'success': False,
-            'error_type': 'FetchFailed',
-            'error': str(e),
-            'user_id': user_id
-        }
+        return {'success': False, 'error': str(e)}
 
 def get_entry_price(symbol, user_id=None):
     """Get entry price safely parsing strings to floats"""
