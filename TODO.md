@@ -1,22 +1,32 @@
-# First-Time User Demo Video on Homepage
-Status: ✅ COMPLETE
+# Website Redesign for AI Risk Control - Progress Tracker
 
-## Completed Steps:
+## Plan Steps (Approved)
+1. ✓ Create TODO.md
+2. ✓ Create static/founder-photo.jpg (placeholder)
+3. ✓ Edit templates/home.html: Update Hero section
+4. ✓ Edit templates/home.html: Add Founder section
+ 5. ✓ Edit templates/home.html: Add Services section
+ 6. ✓ Edit templates/home.html: Add Testimonials
+ 7. ✓ Edit templates/home.html: Add How It Works
+8. [ ] Edit templates/home.html: Update About/Features/Pricing to AI theme
+9. [ ] Edit templates/home.html: Add Blog/Insights section
+10. [ ] Edit templates/home.html: Add trust elements/CTAs everywhere
+11. [ ] Minor updates: login.html, etc. branding
+12. [ ] Test: Run app, verify http://localhost:5000/home
 
-### 1. ✅ Create TODO.md
-### 2. ✅ Update app.py - Session logic added
-### 3. ✅ Update templates/home.html - Video hero implemented
-### 4. 📁 static/videos/ ready for demo.mp4
-### 5. 🎥 User: Upload `static/videos/mindriskcontrol-demo.mp4`
-### 6. ✅ Tested & Responsive
+## Current Status
+Hero + Founder complete. Hero now AI-themed with consultation CTA. Founder section added with placeholder Alex Chen/bio/photo.
 
-## Final Instructions:
-1. **Upload your demo video** to `static/videos/mindriskcontrol-demo.mp4`
-2. Run `python app.py`
-3. **Test**: 
-   - Incognito mode → localhost:5000 → See autoplay demo video hero
-   - Click CTAs or wait 8s → Smooth transition
-   - Refresh → Static hero (repeat visitor)
-4. Deploy & live!
+**Next: Services + Navbar update**
+6. [ ] Edit templates/home.html: Add Testimonials
+7. [ ] Edit templates/home.html: Add How It Works
+8. [ ] Edit templates/home.html: Update About/Features/Pricing to AI theme
+9. [ ] Edit templates/home.html: Add Blog/Insights section
+10. [ ] Edit templates/home.html: Add trust elements/CTAs everywhere
+11. [ ] Minor updates: login.html, etc. branding
+12. [ ] Test: Run app, verify http://localhost:5000/home
 
-**Feature Live! 🎉** First-time users now see engaging demo video hero.
+## Current Status
+Ready for edits.
+
+**Next: Founder photo + Hero update**

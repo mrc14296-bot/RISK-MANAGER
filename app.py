@@ -142,14 +142,29 @@ def register():
         email = (request.form.get('email') or '').strip().lower()
         username = (request.form.get('username') or '').strip()
         password = request.form.get('password') or ''
+        confirm_password = request.form.get('confirm_password') or ''
+
+        # Check if passwords match
+        if password != confirm_password:
+            msg = 'Passwords do not match.'
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({'success': False, 'message': msg}), 400
+            flash(msg, 'error')
+            return render_template('register.html'), 400
 
         if User.query.filter_by(email=email).first():
-            flash('Email already registered. Please log in or use another email.', 'error')
-            return render_template('register.html')
+            msg = 'Email already registered. Please log in or use another email.'
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({'success': False, 'message': msg}), 400
+            flash(msg, 'error')
+            return render_template('register.html'), 400
 
         if User.query.filter_by(username=username).first():
-            flash('Username already taken. Choose a different username.', 'error')
-            return render_template('register.html')
+            msg = 'Username already taken. Choose a different username.'
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({'success': False, 'message': msg}), 400
+            flash(msg, 'error')
+            return render_template('register.html'), 400
 
         hashed_pw = generate_password_hash(password)
         new_user = User(
@@ -160,63 +175,67 @@ def register():
         try:
             db.session.add(new_user)
             db.session.commit()
-            flash('Registration successful. Please log in.', 'success')
+            msg = 'Registration successful. Please log in.'
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({'success': True, 'message': msg}), 200
+            flash(msg, 'success')
             return redirect(url_for('login'))
-        except Exception:
+        except Exception as e:
             db.session.rollback()
-            flash('An error occurred during registration. Please try again.', 'error')
-            return render_template('register.html')
+            msg = 'An error occurred during registration. Please try again.'
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({'success': False, 'message': msg}), 500
+            flash(msg, 'error')
+            return render_template('register.html'), 500
 
     return render_template('register.html')
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        email = request.form.get('email', '').strip().lower()  # Convert to lowercase
+        email = request.form.get('email', '').strip().lower()
         password = request.form.get('password')
 
         user = User.query.filter_by(email=email).first()
 
         if not user or not check_password_hash(user.password, password):
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({'success': False, 'message': 'Invalid email or password'}), 401
             flash("Invalid email or password", "error")
-            return render_template('login.html')
+            return render_template('login.html'), 401
 
-        # FIXED: Allow multiple device login - removed restrictive active_session check
-        # Users can now log in from any device without being forced to logout first
-        
-        # Create session
-        login_user(user, remember=True)  # Added remember=True for persistent login
+        # Allow multiple device login
+        login_user(user, remember=True)
         session_id = str(uuid.uuid4())
         session['session_id'] = session_id
-        session.permanent = True  # Make session permanent
-        
-        # Clear any old active_session to allow fresh login
-        # Don't block login - just update the session
+        session.permanent = True
         user.active_session = session_id
-
         db.session.commit()
-        
-        
-        # FIXED: More robust subscription check on login
-        # First check if user has subscription flag
+
+        # Check if admin
         is_admin = getattr(user, 'is_admin', False) or user.email.lower() in ['admin@mindriskcontrol.com', 'test@test.com']
-    
+
         if not is_admin:
-        # First check if user has subscription flag
-         if not user.is_subscribed:
-            flash("Please subscribe to access the trading dashboard.", "warning")
-            return redirect(url_for('subscribe'))
-        
-        # Check if subscription has expired
-        if user.subscription_end:
-            if datetime.utcnow() > user.subscription_end:
-                user.is_subscribed = False
-                user.subscription_status = 'expired'
-                db.session.commit()
-                flash("Your subscription has expired. Please renew to access the dashboard.", "warning")
+            if not user.is_subscribed:
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return jsonify({'success': False, 'message': 'Please subscribe to access the dashboard'}), 200
+                flash("Please subscribe to access the trading dashboard.", "warning")
                 return redirect(url_for('subscribe'))
-        
-        # Subscription is valid
+
+            # Check if subscription has expired
+            if user.subscription_end:
+                if datetime.utcnow() > user.subscription_end:
+                    user.is_subscribed = False
+                    user.subscription_status = 'expired'
+                    db.session.commit()
+                    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                        return jsonify({'success': False, 'message': 'Your subscription has expired'}), 200
+                    flash("Your subscription has expired. Please renew to access the dashboard.", "warning")
+                    return redirect(url_for('subscribe'))
+
+        # Login successful
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({'success': True, 'redirect': url_for('index')}), 200
         return redirect(url_for('index'))
 
     return render_template('login.html')
@@ -697,12 +716,14 @@ def get_wallet_api():
     print(f"🌐 /api/wallet response: success={wallet_data.get('success')}, assets={wallet_data.get('total_assets',0)}")
     return jsonify(wallet_data)
 
-@app.route("/get_today_stats")
+@app.route("/clear_trade_events", methods=["POST"])
 @login_required
 @subscription_required
-def get_today_stats_api():
-    stats = logic.get_today_stats()
-    return jsonify(stats)
+def clear_trade_events_api():
+    if "trade_events" in session:
+        session["trade_events"] = []
+        session.modified = True
+    return jsonify({"success": True})
 
 @app.route("/close_position/<symbol>", methods=["POST"])
 @login_required
@@ -796,14 +817,25 @@ def index():
     sl_type = request.form.get("sl_type", "SL % Movement")
     sl_val = float(request.form.get("sl_value") or 0)
 
-    tp1 = float(request.form.get("tp1") or 0)
+    tp1_mode = request.form.get("tp1_mode", "TP1 Price")
+    raw_tp1 = float(request.form.get("tp1") or 0)
     tp1_pct = float(request.form.get("tp1_pct") or 0)
     tp2 = float(request.form.get("tp2") or 0)
 
-    sizing = logic.calculate_position_sizing(unutilized, entry, sl_type, sl_val)
+    if tp1_mode == "TP1 % Movement" and raw_tp1 > 0:
+        tp1 = entry * (1 + (raw_tp1 / 100)) if side == "LONG" else entry * (1 - (raw_tp1 / 100))
+    else:
+        tp1 = raw_tp1
+
+    sizing = logic.calculate_position_sizing(unutilized, entry, sl_type, sl_val, side)
     trade_status = session.pop("trade_status", None)
 
     if request.method == "POST" and "place_order" in request.form and not sizing.get("error"):
+        can_trade, limit_message = logic.can_open_trade(selected_symbol)
+        if not can_trade:
+            session["trade_status"] = {"success": False, "message": f"❌ {limit_message}"}
+            return redirect(url_for("index"))
+
         result = logic.execute_trade_action(
             balance, selected_symbol, side, entry, order_type, sl_type, sl_val, sizing,
             float(request.form.get("user_units") or 0), float(request.form.get("user_lev") or 0),
@@ -832,6 +864,8 @@ def index():
         tp1=tp1,
         tp1_pct=tp1_pct,
         tp2=tp2,
+        default_tp1_value=raw_tp1,
+        default_tp1_mode=tp1_mode,
         today_stats=today_stats,
         wallet_debug=wallet_debug
     )

@@ -63,6 +63,12 @@
         .dashboard-preview-card:hover { border-color: rgba(6, 182, 212, 0.5); box-shadow: 0 0 25px rgba(6, 182, 212, 0.2); transform: translateY(-3px); }
         .trader-welcome-banner { background: linear-gradient(135deg, rgba(6, 182, 212, 0.15), rgba(139, 92, 246, 0.15)); border: 1px solid rgba(6, 182, 212, 0.3); }
         .stat-card { background: rgba(6, 182, 212, 0.08); border-left: 3px solid #06b6d4; }
+        .modal { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.7); display: none; align-items: center; justify-content: center; z-index: 1000; }
+        .modal.active { display: flex; }
+        .modal-content { background: rgba(17, 24, 39, 0.95); border: 1px solid rgba(6, 182, 212, 0.3); border-radius: 2rem; padding: 2rem; max-width: 450px; width: 90%; max-height: 90vh; overflow-y: auto; position: relative; animation: slideUp 0.3s ease-out; }
+        @keyframes slideUp { from { transform: translateY(30px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .modal-close { position: absolute; top: 1rem; right: 1rem; width: 2rem; height: 2rem; background: rgba(6, 182, 212, 0.2); border: none; border-radius: 0.5rem; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #06b6d4; font-size: 1.5rem; transition: all 0.3s ease; }
+        .modal-close:hover { background: rgba(6, 182, 212, 0.4); }
     </style>
 </head>
 <body class="font-sans text-gray-100">
@@ -144,14 +150,14 @@
                 </div>
                 <div class="hidden md:flex items-center space-x-8">
                     <a href="#hero" class="nav-link text-gray-300 hover:text-cyan-400 transition-colors font-medium">Home</a>
+                    <a href="#services" class="nav-link text-gray-300 hover:text-cyan-400 transition-colors font-medium">Services</a>
                     <a href="#about" class="nav-link text-gray-300 hover:text-cyan-400 transition-colors font-medium">About</a>
-                    <a href="#features" class="nav-link text-gray-300 hover:text-cyan-400 transition-colors font-medium">Features</a>
                     <a href="#pricing" class="nav-link text-gray-300 hover:text-cyan-400 transition-colors font-medium">Pricing</a>
                     <a href="#contact" class="nav-link text-gray-300 hover:text-cyan-400 transition-colors font-medium">Contact</a>
                     {% if current_user.is_authenticated %}
-                    <a href="/logout" class="bg-slate-800 hover:bg-slate-700 text-white px-6 py-2 rounded-lg font-semibold transition-all">Logout</a>
+                    <button onclick="handleLogout()" class="bg-slate-800 hover:bg-slate-700 text-white px-6 py-2 rounded-lg font-semibold transition-all border-none cursor-pointer">Logout</button>
                     {% else %}
-                    <a href="/login" class="btn-primary text-white px-6 py-2 rounded-lg font-semibold">Login</a>
+                    <button onclick="openLoginModal()" class="btn-primary text-white px-6 py-2 rounded-lg font-semibold">Login</button>
                     {% endif %}
                 </div>
                 <button id="mobile-menu-btn" class="md:hidden text-white focus:outline-none">
@@ -163,14 +169,16 @@
             <div id="mobile-menu" class="mobile-menu md:hidden">
                 <div class="px-2 pt-2 pb-3 space-y-1">
                     <a href="#hero" class="block px-3 py-2 text-gray-300 hover:text-cyan-400 transition-colors">Home</a>
+                    <a href="#services" class="block px-3 py-2 text-gray-300 hover:text-cyan-400 transition-colors">Services</a>
+                    <a href="#testimonials" class="block px-3 py-2 text-gray-300 hover:text-cyan-400 transition-colors">Testimonials</a>
+                    <a href="#how-it-works" class="block px-3 py-2 text-gray-300 hover:text-cyan-400 transition-colors">How It Works</a>
                     <a href="#about" class="block px-3 py-2 text-gray-300 hover:text-cyan-400 transition-colors">About</a>
-                    <a href="#features" class="block px-3 py-2 text-gray-300 hover:text-cyan-400 transition-colors">Features</a>
                     <a href="#pricing" class="block px-3 py-2 text-gray-300 hover:text-cyan-400 transition-colors">Pricing</a>
                     {% if current_user.is_authenticated %}
                     <a href="/index" class="block px-3 py-2 text-cyan-400 font-bold">Dashboard</a>
-                    <a href="/logout" class="block px-3 py-2 text-gray-400">Logout</a>
+                    <button onclick="handleLogout()" class="block w-full text-left px-3 py-2 text-gray-400 hover:text-gray-300 border-none bg-transparent cursor-pointer">Logout</button>
                     {% else %}
-                    <a href="/login" class="block w-full text-center mt-2 btn-primary text-white px-6 py-2.5 rounded-lg font-semibold">Login</a>
+                    <button onclick="openLoginModal()" class="block w-full text-center mt-2 btn-primary text-white px-6 py-2.5 rounded-lg font-semibold border-none cursor-pointer">Login</button>
                     {% endif %}
                 </div>
             </div>
@@ -184,28 +192,148 @@
         <div class="absolute bottom-20 right-10 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-float" style="animation-delay: 2s;"></div>
         <div class="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
             <h1 class="text-5xl md:text-7xl font-extrabold mb-6 leading-tight pt-10">
-                Trade with <span class="gradient-text">Institutional</span><br>Precision
+                AI Risk &amp; Governance <span class="gradient-text">Solutions</span><br>for Modern Organizations
             </h1>
             <p class="text-xl md:text-2xl text-gray-400 mb-10 max-w-3xl mx-auto">
-                Automated risk management, real-time analytics, and execution tools for serious traders.
+                We help businesses identify, manage, and mitigate AI risks with structured governance and compliance frameworks.
             </p>
             <div class="flex flex-col sm:flex-row gap-4 justify-center">
-                <a href="/subscribe" class="btn-primary text-white px-8 py-4 rounded-lg font-semibold text-lg">Get Started</a>
-                <a href="#about" class="bg-transparent border-2 border-gray-600 hover:border-cyan-400 text-white px-8 py-4 rounded-lg font-semibold text-lg transition-all">Learn More</a>
+                <a href="#contact" class="btn-primary text-white px-8 py-4 rounded-lg font-semibold text-lg">Book a Consultation</a>
+                <a href="#services" class="bg-transparent border-2 border-gray-600 hover:border-cyan-400 text-white px-8 py-4 rounded-lg font-semibold text-lg transition-all">Our Services</a>
             </div>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mt-20 max-w-4xl mx-auto">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mt-20 max-w-4xl mx-auto">
                 <div class="glass-card rounded-2xl p-6">
-                    <div class="text-4xl font-bold gradient-text mb-2">99.9%</div>
-                    <div class="text-gray-400">Uptime Guarantee</div>
+                    <div class="text-4xl font-bold gradient-text mb-2">100%</div>
+                    <div class="text-gray-400">Compliance Guarantee</div>
                 </div>
                 <div class="glass-card rounded-2xl p-6">
-                    <div class="text-4xl font-bold gradient-text mb-2">24/7</div>
-                    <div class="text-gray-400">Live Monitoring</div>
+                    <div class="text-4xl font-bold gradient-text mb-2">50+</div>
+                    <div class="text-gray-400">Frameworks Deployed</div>
                 </div>
                 <div class="glass-card rounded-2xl p-6">
-                    <div class="text-4xl font-bold gradient-text mb-2"><10ms</div>
-                    <div class="text-gray-400">Ultra-Low Latency</div>
+                    <div class="text-4xl font-bold gradient-text mb-2">12 months</div>
+                    <div class="text-gray-400">Avg Deployment Time</div>
                 </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Services Section -->
+    <section id="services" class="py-24 px-4 sm:px-6 lg:px-8">
+        <div class="max-w-7xl mx-auto">
+            <div class="text-center mb-16">
+                <h2 class="text-4xl md:text-5xl font-bold mb-4">Our Core <span class="gradient-text">Services</span></h2>
+                <p class="text-gray-400 text-xl max-w-2xl mx-auto">Comprehensive AI risk management for your organization</p>
+            </div>
+            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <div class="glass-card rounded-3xl p-8 hover-glow">
+                    <div class="text-5xl mb-6">🔍</div>
+                    <h3 class="text-2xl font-bold text-white mb-4">AI Risk Assessment</h3>
+                    <p class="text-gray-400 mb-6">Comprehensive audit of your AI systems to identify technical, ethical, and regulatory risks.</p>
+                    <ul class="text-left space-y-2 text-sm text-gray-400">
+                        <li>• Model bias detection</li>
+                        <li>• Data privacy evaluation</li>
+                        <li>• Security vulnerability scan</li>
+                    </ul>
+                    <a href="#contact" class="mt-6 inline-block font-semibold text-cyan-400 hover:text-cyan-300">Learn More →</a>
+                </div>
+                <div class="glass-card rounded-3xl p-8 hover-glow">
+                    <div class="text-5xl mb-6">🏛️</div>
+                    <h3 class="text-2xl font-bold text-white mb-4">AI Governance Framework</h3>
+                    <p class="text-gray-400 mb-6">Custom governance structures, policies, and control systems for responsible AI deployment.</p>
+                    <ul class="text-left space-y-2 text-sm text-gray-400">
+                        <li>• Policy development</li>
+                        <li>• Risk control systems</li>
+                        <li>• Monitoring dashboards</li>
+                    </ul>
+                    <a href="#contact" class="mt-6 inline-block font-semibold text-cyan-400 hover:text-cyan-300">Learn More →</a>
+                </div>
+                <div class="glass-card rounded-3xl p-8 hover-glow">
+                    <div class="text-5xl mb-6">⚖️</div>
+                    <h3 class="text-2xl font-bold text-white mb-4">Compliance & Advisory</h3>
+                    <p class="text-gray-400 mb-6">Navigate complex regulations and ensure ethical AI usage across global jurisdictions.</p>
+                    <ul class="text-left space-y-2 text-sm text-gray-400">
+                        <li>• EU AI Act compliance</li>
+                        <li>• SOC 2 preparation</li>
+                        <li>• Executive advisory</li>
+                    </ul>
+                    <a href="#contact" class="mt-6 inline-block font-semibold text-cyan-400 hover:text-cyan-300">Learn More →</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Testimonials Section -->
+    <section id="testimonials" class="py-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-transparent to-dark-bg/50">
+        <div class="max-w-4xl mx-auto">
+            <div class="text-center mb-16">
+                <h2 class="text-4xl md:text-5xl font-bold mb-4">Trusted by <span class="gradient-text">Leading Organizations</span></h2>
+                <p class="text-gray-400 text-xl max-w-2xl mx-auto">Don't just take our word for it</p>
+            </div>
+            <div class="grid md:grid-cols-2 gap-8">
+                <div class="glass-card rounded-3xl p-10 hover-glow">
+                    <div class="flex items-center mb-6">
+                        <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-cyan-400 to-blue-500 flex items-center justify-center text-2xl font-bold text-white mr-4">AB</div>
+                        <div>
+                            <h4 class="font-bold text-white text-xl">Amit B.</h4>
+                            <p class="text-gray-400 text-sm">CTO, FinTech Startup</p>
+                        </div>
+                    </div>
+                    <p class="text-gray-300 text-lg italic leading-relaxed">"Mind Risk Control helped us identify critical AI risks and implement a governance framework that passed our SOC 2 audit on the first try."</p>
+                </div>
+                <div class="glass-card rounded-3xl p-10 hover-glow">
+                    <div class="flex items-center mb-6">
+                        <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-400 to-pink-500 flex items-center justify-center text-2xl font-bold text-white mr-4">SC</div>
+                        <div>
+                            <h4 class="font-bold text-white text-xl">Sara C.</h4>
+                            <p class="text-gray-400 text-sm">Head of AI, Enterprise Corp</p>
+                        </div>
+                    </div>
+                    <p class="text-gray-300 text-lg italic leading-relaxed">"Their compliance advisory was instrumental in navigating EU AI Act requirements. Highly recommended for any serious AI deployment."</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works Section -->
+    <section id="how-it-works" class="py-24 px-4 sm:px-6 lg:px-8">
+        <div class="max-w-6xl mx-auto">
+            <div class="text-center mb-16">
+                <h2 class="text-4xl md:text-5xl font-bold mb-4">How We <span class="gradient-text">Work</span></h2>
+                <p class="text-gray-400 text-xl max-w-2xl mx-auto">Simple, transparent process for AI risk mastery</p>
+            </div>
+            <div class="grid md:grid-cols-4 gap-8 items-center">
+                <div class="text-center">
+                    <div class="w-20 h-20 mx-auto mb-6 rounded-3xl bg-cyan-500/20 flex items-center justify-center">
+                        <span class="text-2xl font-bold text-cyan-400">1</span>
+                    </div>
+                    <h3 class="text-2xl font-bold text-white mb-4">Discovery</h3>
+                    <p class="text-gray-400">Understand your AI systems, use cases, and current risk posture</p>
+                </div>
+                <div class="text-center">
+                    <div class="w-20 h-20 mx-auto mb-6 rounded-3xl bg-cyan-500/20 flex items-center justify-center">
+                        <span class="text-2xl font-bold text-cyan-400">2</span>
+                    </div>
+                    <h3 class="text-2xl font-bold text-white mb-4">Assessment</h3>
+                    <p class="text-gray-400">Comprehensive risk identification across technical, ethical, regulatory dimensions</p>
+                </div>
+                <div class="text-center">
+                    <div class="w-20 h-20 mx-auto mb-6 rounded-3xl bg-cyan-500/20 flex items-center justify-center">
+                        <span class="text-2xl font-bold text-cyan-400">3</span>
+                    </div>
+                    <h3 class="text-2xl font-bold text-white mb-4">Framework</h3>
+                    <p class="text-gray-400">Build governance policies, controls, and monitoring systems</p>
+                </div>
+                <div class="text-center">
+                    <div class="w-20 h-20 mx-auto mb-6 rounded-3xl bg-cyan-500/20 flex items-center justify-center">
+                        <span class="text-2xl font-bold text-cyan-400">4</span>
+                    </div>
+                    <h3 class="text-2xl font-bold text-white mb-4">Monitor</h3>
+                    <p class="text-gray-400">Continuous monitoring, reporting, and framework evolution</p>
+                </div>
+            </div>
+            <div class="text-center mt-16">
+                <a href="#contact" class="btn-primary text-white px-12 py-6 rounded-2xl font-semibold text-xl">Start Your Journey</a>
             </div>
         </div>
     </section>
@@ -214,38 +342,38 @@
         <div class="max-w-7xl mx-auto">
             <div class="grid md:grid-cols-2 gap-12 items-center">
                 <div>
-                    <h2 class="text-4xl md:text-5xl font-bold mb-6">Empowering <span class="gradient-text">Retail Traders</span></h2>
-                    <p class="text-gray-400 text-lg mb-6">Our platform was built to bridge the gap between retail trading and high-frequency institutional desks. We provide the tools you need to manage risk without human emotion.</p>
-                    <p class="text-gray-400 text-lg mb-8">With advanced algorithms and real-time data processing, you get institutional-grade trading capabilities at your fingertips.</p>
+                <h2 class="text-4xl md:text-5xl font-bold mb-6">AI Risk Management <span class="gradient-text">for Enterprises</span></h2>
+                    <p class="text-gray-400 text-lg mb-6">We bridge the gap between cutting-edge AI innovation and regulatory compliance, providing enterprise-grade risk management frameworks that scale with your business.</p>
+                    <p class="text-gray-400 text-lg mb-8">Our battle-tested methodologies ensure your AI deployments are secure, ethical, and future-proof against evolving global regulations.</p>
                     <div class="space-y-4">
                         <div class="flex items-start gap-4">
                             <div class="w-8 h-8 rounded-full bg-cyan-500/20 flex items-center justify-center flex-shrink-0 mt-1">
                                 <svg class="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                             </div>
-                            <div><h4 class="font-semibold text-white mb-1">Automated Risk Management</h4><p class="text-gray-400">Never risk more than you can afford with hard-capped stop losses</p></div>
+                            <div><h4 class="font-semibold text-white mb-1">Comprehensive Audits</h4><p class="text-gray-400">Full AI system audits covering technical, ethical, and regulatory risks</p></div>
                         </div>
                         <div class="flex items-start gap-4">
                             <div class="w-8 h-8 rounded-full bg-cyan-500/20 flex items-center justify-center flex-shrink-0 mt-1">
                                 <svg class="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                             </div>
-                            <div><h4 class="font-semibold text-white mb-1">Real-Time Analytics</h4><p class="text-gray-400">Track your performance with institutional-grade metrics</p></div>
+                            <div><h4 class="font-semibold text-white mb-1">Real-Time Monitoring</h4><p class="text-gray-400">Continuous AI governance dashboard with compliance metrics</p></div>
                         </div>
                         <div class="flex items-start gap-4">
                             <div class="w-8 h-8 rounded-full bg-cyan-500/20 flex items-center justify-center flex-shrink-0 mt-1">
                                 <svg class="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                             </div>
-                            <div><h4 class="font-semibold text-white mb-1">Lightning Fast Execution</h4><p class="text-gray-400">Sub-10ms latency ensures you never miss an opportunity</p></div>
+                            <div><h4 class="font-semibold text-white mb-1">Framework Implementation</h4><p class="text-gray-400">Custom governance frameworks tailored to your organization's needs</p></div>
                         </div>
                     </div>
                 </div>
                 <div class="space-y-6">
                     <div class="glass-card rounded-3xl p-8 hover-glow">
                         <h3 class="text-2xl font-bold text-white mb-4">Our Mission</h3>
-                        <p class="text-gray-400 leading-relaxed">To provide professional-grade automated execution and risk calculation tools to every trader, regardless of account size.</p>
+                        <p class="text-gray-400 leading-relaxed">To make AI safe for enterprise adoption through comprehensive risk management and governance frameworks.</p>
                     </div>
                     <div class="glass-card rounded-3xl p-8 hover-glow">
                         <h3 class="text-2xl font-bold text-white mb-4">Why Choose Us?</h3>
-                        <p class="text-gray-400 leading-relaxed">Built by traders, for traders. Our team has decades of combined experience in quantitative trading, risk management, and financial technology.</p>
+                        <p class="text-gray-400 leading-relaxed">Built by AI governance experts with experience from Google, Microsoft, and regulatory bodies.</p>
                     </div>
                 </div>
             </div>
@@ -254,17 +382,17 @@
     <!-- Features Section -->
     <section id="features" class="py-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-transparent to-dark-bg/50">
         <div class="max-w-7xl mx-auto">
-            <div class="text-center mb-16">
-                <h2 class="text-4xl md:text-5xl font-bold mb-4">Platform <span class="gradient-text">Features</span></h2>
-                <p class="text-gray-400 text-xl max-w-2xl mx-auto">Everything you need to trade like a professional</p>
+    <div class="text-center mb-16">
+                <h2 class="text-4xl md:text-5xl font-bold mb-4">AI Risk <span class="gradient-text">Capabilities</span></h2>
+                <p class="text-gray-400 text-xl max-w-2xl mx-auto">Complete toolkit for enterprise AI governance</p>
             </div>
             <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-                <div class="glass-card rounded-3xl p-8 hover-glow"><div class="text-5xl mb-4">🤖</div><h3 class="text-2xl font-bold text-white mb-3">Auto-Execution</h3><p class="text-gray-400">Instant order placement based on your pre-set risk parameters.</p></div>
-                <div class="glass-card rounded-3xl p-8 hover-glow"><div class="text-5xl mb-4">📊</div><h3 class="text-2xl font-bold text-white mb-3">Live Analytics</h3><p class="text-gray-400">Real-time P&L tracking, win rate analysis, and performance metrics.</p></div>
-                <div class="glass-card rounded-3xl p-8 hover-glow"><div class="text-5xl mb-4">🛡️</div><h3 class="text-2xl font-bold text-white mb-3">Hard-Capped SL</h3><p class="text-gray-400">Automatic stop-loss adjustment to ensure you never lose more than 1%.</p></div>
-                <div class="glass-card rounded-3xl p-8 hover-glow"><div class="text-5xl mb-4">⚡</div><h3 class="text-2xl font-bold text-white mb-3">Low Latency</h3><p class="text-gray-400">Sub-10ms execution speed with direct market access.</p></div>
-                <div class="glass-card rounded-3xl p-8 hover-glow"><div class="text-5xl mb-4">🔔</div><h3 class="text-2xl font-bold text-white mb-3">Smart Alerts</h3><p class="text-gray-400">Intelligent notifications for market movements and trade executions.</p></div>
-                <div class="glass-card rounded-3xl p-8 hover-glow"><div class="text-5xl mb-4">📱</div><h3 class="text-2xl font-bold text-white mb-3">Mobile Ready</h3><p class="text-gray-400">Trade from anywhere with our fully responsive platform.</p></div>
+                <div class="glass-card rounded-3xl p-8 hover-glow"><div class="text-5xl mb-4">🎯</div><h3 class="text-2xl font-bold text-white mb-3">Risk Scoring</h3><p class="text-gray-400">Automated AI model risk scoring across 50+ risk categories with prioritized remediation.</p></div>
+                <div class="glass-card rounded-3xl p-8 hover-glow"><div class="text-5xl mb-4">📋</div><h3 class="text-2xl font-bold text-white mb-3">Policy Engine</h3><p class="text-gray-400">Dynamic policy management with version control and automated compliance checks.</p></div>
+                <div class="glass-card rounded-3xl p-8 hover-glow"><div class="text-5xl mb-4">🔒</div><h3 class="text-2xl font-bold text-white mb-3">Control Library</h3><p class="text-gray-400">300+ pre-built technical, administrative, and physical controls mapped to frameworks.</p></div>
+                <div class="glass-card rounded-3xl p-8 hover-glow"><div class="text-5xl mb-4">📊</div><h3 class="text-2xl font-bold text-white mb-3">Risk Dashboard</h3><p class="text-gray-400">Real-time visualization of risk posture, control effectiveness, and compliance status.</p></div>
+                <div class="glass-card rounded-3xl p-8 hover-glow"><div class="text-5xl mb-4">⚠️</div><h3 class="text-2xl font-bold text-white mb-3">Alert System</h3><p class="text-gray-400">Intelligent risk alerts with automated mitigation workflows and escalation paths.</p></div>
+                <div class="glass-card rounded-3xl p-8 hover-glow"><div class="text-5xl mb-4">🔌</div><h3 class="text-2xl font-bold text-white mb-3">API Integration</h3><p class="text-gray-400">Seamless integration with your CI/CD pipelines, MLOps platforms, and compliance tools.</p></div>
             </div>
         </div>
     </section>
@@ -272,22 +400,22 @@
     <section id="dashboard" class="py-24 px-4 sm:px-6 lg:px-8 bg-dark-bg">
         <div class="max-w-7xl mx-auto">
             <div class="text-center mb-16">
-                <h2 class="text-4xl md:text-5xl font-bold mb-4">Your <span class="gradient-text">Trading Dashboard</span></h2>
-                <p class="text-gray-400 text-xl max-w-2xl mx-auto">Powerful tools for serious traders</p>
+                <h2 class="text-4xl md:text-5xl font-bold mb-4">Your <span class="gradient-text">Risk Dashboard</span></h2>
+                <p class="text-gray-400 text-xl max-w-2xl mx-auto">Executive overview of your AI governance posture</p>
             </div>
             <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
-                <div class="dashboard-preview-card rounded-2xl p-6"><h3 class="text-xl font-bold text-white mb-3">🕹️ Trading Controls</h3><ul class="space-y-2 text-gray-400"><li>✓ LONG/SHORT positions</li><li>✓ MARKET & LIMIT orders</li><li>✓ ISOLATED & CROSS margin</li></ul></div>
-                <div class="dashboard-preview-card rounded-2xl p-6"><h3 class="text-xl font-bold text-white mb-3">🛡️ Risk Management</h3><ul class="space-y-2 text-gray-400"><li>✓ 1% risk pool calculation</li><li>✓ Mandatory stop-loss</li><li>✓ Auto SL adjustment</li></ul></div>
-                <div class="dashboard-preview-card rounded-2xl p-6"><h3 class="text-xl font-bold text-white mb-3">📈 Take Profit</h3><ul class="space-y-2 text-gray-400"><li>✓ TP1 with quantity %</li><li>✓ TP2 full close</li><li>✓ Auto TP execution</li></ul></div>
-                <div class="dashboard-preview-card rounded-2xl p-6"><h3 class="text-xl font-bold text-white mb-3">📊 Live Positions</h3><ul class="space-y-2 text-gray-400"><li>✓ Real-time P&L</li><li>✓ ROI percentage</li><li>✓ Entry & Mark price</li></ul></div>
-                <div class="dashboard-preview-card rounded-2xl p-6"><h3 class="text-xl font-bold text-white mb-3">📜 Trade History</h3><ul class="space-y-2 text-gray-400"><li>✓ Complete trade log</li><li>✓ Realized P&L</li><li>✓ CSV export</li></ul></div>
-                <div class="dashboard-preview-card rounded-2xl p-6"><h3 class="text-xl font-bold text-white mb-3">🔧 Trading Tools</h3><ul class="space-y-2 text-gray-400"><li>✓ Position sizing calculator</li><li>✓ Leverage suggestions</li><li>✓ Risk amount display</li></ul></div>
+                <div class="dashboard-preview-card rounded-2xl p-6"><h3 class="text-xl font-bold text-white mb-3">🎯 Risk Scoring</h3><ul class="space-y-2 text-gray-400"><li>✓ Model risk scores</li><li>✓ Framework coverage</li><li>✓ Residual risk levels</li></ul></div>
+                <div class="dashboard-preview-card rounded-2xl p-6"><h3 class="text-xl font-bold text-white mb-3">📊 Compliance Metrics</h3><ul class="space-y-2 text-gray-400"><li>✓ Control effectiveness</li><li>✓ Regulatory alignment</li><li>✓ Audit readiness score</li></ul></div>
+                <div class="dashboard-preview-card rounded-2xl p-6"><h3 class="text-xl font-bold text-white mb-3">📋 Policy Library</h3><ul class="space-y-2 text-gray-400"><li>✓ 500+ policies</li><li>✓ Auto-applicability</li><li>✓ Version control</li></ul></div>
+                <div class="dashboard-preview-card rounded-2xl p-6"><h3 class="text-xl font-bold text-white mb-3">⚖️ Regulation Tracker</h3><ul class="space-y-2 text-gray-400"><li>✓ Global coverage</li><li>✓ Auto-updates</li><li>✓ Impact analysis</li></ul></div>
+                <div class="dashboard-preview-card rounded-2xl p-6"><h3 class="text-xl font-bold text-white mb-3">📈 Risk Heatmap</h3><ul class="space-y-2 text-gray-400"><li>✓ Visual risk overview</li><li>✓ Trend analysis</li><li>✓ Export reports</li></ul></div>
+                <div class="dashboard-preview-card rounded-2xl p-6"><h3 class="text-xl font-bold text-white mb-3">🔧 Control Testing</h3><ul class="space-y-2 text-gray-400"><li>✓ Automated testing</li><li>✓ Gap analysis</li><li>✓ Remediation tracking</li></ul></div>
             </div>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12">
-                <div class="stat-card rounded-xl p-4 text-center"><div class="text-2xl font-bold gradient-text">50+</div><div class="text-sm text-gray-400">Trading Pairs</div></div>
-                <div class="stat-card rounded-xl p-4 text-center"><div class="text-2xl font-bold gradient-text"><10ms</div><div class="text-sm text-gray-400">Execution Speed</div></div>
-                <div class="stat-card rounded-xl p-4 text-center"><div class="text-2xl font-bold gradient-text">99.9%</div><div class="text-sm text-gray-400">Uptime</div></div>
-                <div class="stat-card rounded-xl p-4 text-center"><div class="text-2xl font-bold gradient-text">24/7</div><div class="text-sm text-gray-400">Live Support</div></div>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12">
+                <div class="stat-card rounded-xl p-4 text-center"><div class="text-2xl font-bold gradient-text">50+</div><div class="text-sm text-gray-400">Clients Served</div></div>
+                <div class="stat-card rounded-xl p-4 text-center"><div class="text-2xl font-bold gradient-text">99.9%</div><div class="text-sm text-gray-400">Compliance Rate</div></div>
+                <div class="stat-card rounded-xl p-4 text-center"><div class="text-2xl font-bold gradient-text">12 weeks</div><div class="text-sm text-gray-400">Avg Deployment</div></div>
+                <div class="stat-card rounded-xl p-4 text-center"><div class="text-2xl font-bold gradient-text">24/7</div><div class="text-sm text-gray-400">Support</div></div>
             </div>
         </div>
     </section>
@@ -301,12 +429,12 @@
             <div class="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
                 <div class="glass-card rounded-3xl p-8 hover-glow">
                     <div class="text-center">
-                        <h3 class="text-lg font-semibold text-gray-400 uppercase tracking-wider mb-4">Starter</h3>
-                        <div class="mb-6"><span class="text-5xl font-bold text-white">₹0</span><span class="text-gray-400">/month</span></div>
+    <h3 class="text-lg font-semibold text-gray-400 uppercase tracking-wider mb-4">Discovery</h3>
+                        <div class="mb-6"><span class="text-5xl font-bold text-white">Free</span></div>
                         <ul class="text-left space-y-4 mb-8">
-                            <li class="flex items-start gap-3"><svg class="w-5 h-5 text-cyan-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg><span class="text-gray-300">5 Trades per Day</span></li>
-                            <li class="flex items-start gap-3"><svg class="w-5 h-5 text-cyan-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg><span class="text-gray-300">Basic Risk Calculator</span></li>
-                            <li class="flex items-start gap-3"><svg class="w-5 h-5 text-cyan-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg><span class="text-gray-300">Email Support</span></li>
+                            <li class="flex items-start gap-3"><svg class="w-5 h-5 text-cyan-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg><span class="text-gray-300">30-min consultation</span></li>
+                            <li class="flex items-start gap-3"><svg class="w-5 h-5 text-cyan-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg><span class="text-gray-300">Risk landscape overview</span></li>
+                            <li class="flex items-start gap-3"><svg class="w-5 h-5 text-cyan-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg><span class="text-gray-300">Roadmap discussion</span></li>
                         </ul>
                         <a href="/index" class="w-full block bg-transparent border-2 border-gray-600 hover:border-cyan-400 text-white px-6 py-3 rounded-lg font-semibold transition-all text-center">Join Free</a>
                     </div>
@@ -314,14 +442,14 @@
                 <div class="glass-card rounded-3xl p-8 gradient-border hover-glow transform scale-105">
                     <div class="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1/2"><span class="bg-gradient-to-r from-cyan-500 to-purple-500 text-white px-4 py-1 rounded-full text-sm font-semibold">POPULAR</span></div>
                     <div class="text-center">
-                        <h3 class="text-lg font-semibold text-gray-400 uppercase tracking-wider mb-4">Pro Monthly</h3>
-                        <div class="mb-6"><span class="text-5xl font-bold gradient-text">₹499</span><span class="text-gray-400">/month</span></div>
+<h3 class="text-lg font-semibold text-gray-400 uppercase tracking-wider mb-4">Assessment</h3>
+                        <div class="mb-6"><span class="text-5xl font-bold gradient-text">₹25,000</span></div>
                         <ul class="text-left space-y-4 mb-8">
-                            <li class="flex items-start gap-3"><svg class="w-5 h-5 text-cyan-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg><span class="text-gray-300">Unlimited Trades</span></li>
-                            <li class="flex items-start gap-3"><svg class="w-5 h-5 text-cyan-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg><span class="text-gray-300">Full Automation</span></li>
-                            <li class="flex items-start gap-3"><svg class="w-5 h-5 text-cyan-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg><span class="text-gray-300">Priority Support</span></li>
-                            <li class="flex items-start gap-3"><svg class="w-5 h-5 text-cyan-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg><span class="text-gray-300">Advanced Analytics</span></li>
-                            <li class="flex items-start gap-3"><svg class="w-5 h-5 text-cyan-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg><span class="text-gray-300">API Access</span></li>
+                            <li class="flex items-start gap-3"><svg class="w-5 h-5 text-cyan-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg><span class="text-gray-300">Full AI portfolio audit</span></li>
+                            <li class="flex items-start gap-3"><svg class="w-5 h-5 text-cyan-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg><span class="text-gray-300">Risk register creation</span></li>
+                            <li class="flex items-start gap-3"><svg class="w-5 h-5 text-cyan-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg><span class="text-gray-300">Prioritized roadmap</span></li>
+                            <li class="flex items-start gap-3"><svg class="w-5 h-5 text-cyan-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg><span class="text-gray-300">Executive presentation</span></li>
+                            <li class="flex items-start gap-3"><svg class="w-5 h-5 text-cyan-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg><span class="text-gray-300">Detailed report</span></li>
                         </ul>
                         <a href="/subscribe" class="w-full block btn-primary text-white px-6 py-3 rounded-lg font-semibold text-center">Activate Pro</a>
                     </div>
@@ -329,13 +457,13 @@
                 <div class="glass-card rounded-3xl p-8 hover-glow">
                     <div class="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1/2"><span class="bg-green-500 text-white px-4 py-1 rounded-full text-sm font-semibold">SAVE 17%</span></div>
                     <div class="text-center">
-                        <h3 class="text-lg font-semibold text-gray-400 uppercase tracking-wider mb-4">Pro Yearly</h3>
-                        <div class="mb-6"><span class="text-5xl font-bold text-white">₹5000</span><span class="text-gray-400">/year</span></div>
+    <h3 class="text-lg font-semibold text-gray-400 uppercase tracking-wider mb-4">Enterprise</h3>
+                        <div class="mb-6"><span class="text-5xl font-bold text-white">Custom</span></div>
                         <ul class="text-left space-y-4 mb-8">
-                            <li class="flex items-start gap-3"><svg class="w-5 h-5 text-cyan-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg><span class="text-gray-300">Everything in Pro Monthly</span></li>
-                            <li class="flex items-start gap-3"><svg class="w-5 h-5 text-cyan-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg><span class="text-gray-300">2 Months Free</span></li>
-                            <li class="flex items-start gap-3"><svg class="w-5 h-5 text-cyan-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg><span class="text-gray-300">Dedicated Account Manager</span></li>
-                            <li class="flex items-start gap-3"><svg class="w-5 h-5 text-cyan-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg><span class="text-gray-300">Early Access to New Features</span></li>
+                            <li class="flex items-start gap-3"><svg class="w-5 h-5 text-cyan-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg><span class="text-gray-300">Everything in Assessment</span></li>
+                            <li class="flex items-start gap-3"><svg class="w-5 h-5 text-cyan-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg><span class="text-gray-300">Full framework implementation</span></li>
+                            <li class="flex items-start gap-3"><svg class="w-5 h-5 text-cyan-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg><span class="text-gray-300">Dedicated consultant</span></li>
+                            <li class="flex items-start gap-3"><svg class="w-5 h-5 text-cyan-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg><span class="text-gray-300">Ongoing support</span></li>
                         </ul>
                         <a href="/subscribe" class="w-full block btn-primary text-white px-6 py-3 rounded-lg font-semibold text-center">Activate Pro</a>
                     </div>
@@ -352,7 +480,8 @@
             <div class="grid md:grid-cols-2 gap-12">
                 <div>
                     <h2 class="text-4xl md:text-5xl font-bold mb-6">Get in <span class="gradient-text">Touch</span></h2>
-                    <p class="text-gray-400 text-lg mb-8">Questions about the API or Enterprise plans? Drop us a message.</div class="space-y-6">
+                    <p class="text-gray-400 text-lg mb-8">Questions about the API or Enterprise plans? Drop us a message.</p>
+                    <div class="space-y-6">
                                          <div class="flex items-start gap-4">
                             <div class="w-12 h-12 rounded-xl bg-cyan-500/20 flex items-center justify-center flex-shrink-0"><svg class="w-6 h-6 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg></div>
                             <div><h4 class="font-semibold text-white mb-1">Email</h4><p class="text-gray-400">support@mindriskcontrol.com</p></div>
@@ -387,7 +516,7 @@
             <div class="grid md:grid-cols-4 gap-12 mb-12">
                 <div class="md:col-span-1">
                     <h3 class="text-2xl font-bold gradient-text mb-4">Mind Risk Control</h3>
-                    <p class="text-gray-400 mb-6">Institutional-grade trading platform for the modern trader.</p>
+    <p class="text-gray-400 mb-6">AI Risk & Governance platform for modern enterprises.</p>
                     <div class="flex gap-4">
                         <a href="#" class="w-10 h-10 rounded-full bg-gray-800 hover:bg-cyan-500/20 flex items-center justify-center"><svg class="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 24 24"><path d="M24 4.557c-.883.392-1.832.656-2.828.775 1.017-.609 1.798-1.574 2.165-2.724-.951.564-2.005.974-3.127 1.195-.897-.957-2.178-1.555-3.594-1.555-3.179 0-5.515 2.966-4.797 6.045-4.091-.205-7.719-2.165-10.148-5.144-1.29 2.213-.669 5.108 1.523 6.574-.806-.026-1.566-.247-2.229-.616-.054 2.281 1.581 4.415 3.949 4.89-.693.188-1.452.232-2.224.084.626 1.956 2.444 3.379 4.6 3.419-2.07 1.623-4.678 2.348-7.29 2.04 2.179 1.397 4.768 2.212 7.548 2.212 9.142 0 14.307-7.721 13.995-14.646.962-.695 1.797-1.562 2.457-2.549z"/></svg></a>
                         <a href="#" class="w-10 h-10 rounded-full bg-gray-800 hover:bg-cyan-500/20 flex items-center justify-center"><svg class="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg></a>
@@ -400,13 +529,13 @@
             </div>
             <div class="glass-card rounded-2xl p-8 mb-12">
                 <div class="md:flex md:items-center md:justify-between">
-                    <div class="mb-4 md:mb-0"><h4 class="text-xl font-bold text-white mb-2">Subscribe to our newsletter</h4><p class="text-gray-400">Get weekly market insights and platform updates</p></div>
+                <p class="text-gray-400">Get weekly AI governance insights and updates</p>
                     <form class="flex gap-3"><input type="email" placeholder="Enter your email" class="px-4 py-3 bg-dark-bg border border-gray-700 rounded-lg text-white focus:outline-none focus:border-cyan-400"><button type="submit" class="btn-primary text-white px-6 py-3 rounded-lg font-semibold whitespace-nowrap">Subscribe</button></form>
                 </div>
             </div>
             <div class="pt-8 border-t border-gray-800 text-center">
                 <p class="text-gray-500">© 2024 Mind Risk Control. All rights reserved.</p>
-                <p class="text-gray-600 text-sm mt-2">Trading involves risk. Past performance is not indicative of future results.</p>
+                <p class="text-gray-600 text-sm mt-2">Leading AI Risk & Governance Solutions.</p>
             </div>
         </div>
     </footer>
@@ -446,5 +575,166 @@
     <script>
 (function(){if(!window.chatbase||window.chatbase("getState")!=="initialized"){window.chatbase=(...arguments)=>{if(!window.chatbase.q){window.chatbase.q=[]}window.chatbase.q.push(arguments)};window.chatbase=new Proxy(window.chatbase,{get(target,prop){if(prop==="q"){return target.q}return(...args)=>target(prop,...args)}})}const onLoad=function(){const script=document.createElement("script");script.src="https://www.chatbase.co/embed.min.js";script.id="pLc3jMAGYgcU-_iIwhJlJ";script.domain="www.chatbase.co";document.body.appendChild(script)};if(document.readyState==="complete"){onLoad()}else{window.addEventListener("load",onLoad)}})();
 </script>
+    <!-- Login Modal -->
+    <div id="loginModal" class="modal">
+        <div class="modal-content">
+            <button class="modal-close" onclick="closeLoginModal()">&times;</button>
+            <h2 class="text-3xl font-bold text-white mb-6 gradient-text">Login</h2>
+            <form id="loginForm" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Email</label>
+                    <input type="email" name="email" required class="w-full px-4 py-3 bg-dark-bg border border-gray-700 rounded-lg text-white focus:outline-none focus:border-cyan-400" placeholder="your@email.com">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Password</label>
+                    <input type="password" name="password" required class="w-full px-4 py-3 bg-dark-bg border border-gray-700 rounded-lg text-white focus:outline-none focus:border-cyan-400" placeholder="Your password">
+                </div>
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" id="remember" name="remember" class="w-4 h-4">
+                    <label for="remember" class="text-sm text-gray-400">Remember me</label>
+                </div>
+                <button type="submit" class="w-full btn-primary text-white px-4 py-3 rounded-lg font-semibold">Login</button>
+            </form>
+            <div class="mt-6 text-center">
+                <p class="text-gray-400">Don't have an account? <button onclick="switchToRegister()" class="text-cyan-400 hover:text-cyan-300 font-semibold">Register here</button></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Register Modal -->
+    <div id="registerModal" class="modal">
+        <div class="modal-content">
+            <button class="modal-close" onclick="closeRegisterModal()">&times;</button>
+            <h2 class="text-3xl font-bold text-white mb-6 gradient-text">Create Account</h2>
+            <form id="registerForm" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Username</label>
+                    <input type="text" name="username" required class="w-full px-4 py-3 bg-dark-bg border border-gray-700 rounded-lg text-white focus:outline-none focus:border-cyan-400" placeholder="Choose a username">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Email</label>
+                    <input type="email" name="email" required class="w-full px-4 py-3 bg-dark-bg border border-gray-700 rounded-lg text-white focus:outline-none focus:border-cyan-400" placeholder="your@email.com">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Password</label>
+                    <input type="password" name="password" required class="w-full px-4 py-3 bg-dark-bg border border-gray-700 rounded-lg text-white focus:outline-none focus:border-cyan-400" placeholder="Create a password">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Confirm Password</label>
+                    <input type="password" name="confirm_password" required class="w-full px-4 py-3 bg-dark-bg border border-gray-700 rounded-lg text-white focus:outline-none focus:border-cyan-400" placeholder="Confirm password">
+                </div>
+                <button type="submit" class="w-full btn-primary text-white px-4 py-3 rounded-lg font-semibold">Register</button>
+            </form>
+            <div class="mt-6 text-center">
+                <p class="text-gray-400">Already have an account? <button onclick="switchToLogin()" class="text-cyan-400 hover:text-cyan-300 font-semibold">Login here</button></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Modal Management
+        function openLoginModal() { document.getElementById('loginModal').classList.add('active'); document.body.style.overflow = 'hidden'; }
+        function closeLoginModal() { document.getElementById('loginModal').classList.remove('active'); document.body.style.overflow = 'auto'; }
+        function openRegisterModal() { document.getElementById('registerModal').classList.add('active'); document.body.style.overflow = 'hidden'; }
+        function closeRegisterModal() { document.getElementById('registerModal').classList.remove('active'); document.body.style.overflow = 'auto'; }
+        function switchToLogin() { closeRegisterModal(); openLoginModal(); }
+        function switchToRegister() { closeLoginModal(); openRegisterModal(); }
+        
+        // Logout Handler
+        function handleLogout() {
+            window.location.href = '/logout';
+        }
+        
+        // Close modal when clicking outside
+        document.getElementById('loginModal').addEventListener('click', (e) => { if (e.target.id === 'loginModal') closeLoginModal(); });
+        document.getElementById('registerModal').addEventListener('click', (e) => { if (e.target.id === 'registerModal') closeRegisterModal(); });
+        
+        // Login Form Submission
+        document.getElementById('loginForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const submitBtn = e.target.querySelector('button[type="submit"]');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Logging in...';
+            
+            fetch('/login', { 
+                method: 'POST', 
+                body: new URLSearchParams(formData),
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                credentials: 'same-origin'
+            })
+            .then(res => res.json().then(data => ({status: res.status, data: data})))
+            .then(({status, data}) => {
+                if (data.success) {
+                    closeLoginModal();
+                    setTimeout(() => {
+                        window.location.href = data.redirect || '/index';
+                    }, 300);
+                } else {
+                    throw new Error(data.message || 'Login failed');
+                }
+            })
+            .catch(err => { 
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Login';
+                alert('Login failed: ' + err.message);
+            });
+        });
+        
+        // Register Form Submission
+        document.getElementById('registerForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const password = e.target.querySelector('input[name="password"]').value;
+            const confirmPassword = e.target.querySelector('input[name="confirm_password"]').value;
+            
+            // Validate passwords match
+            if (password !== confirmPassword) {
+                alert('Passwords do not match!');
+                return;
+            }
+            
+            if (password.length < 6) {
+                alert('Password must be at least 6 characters!');
+                return;
+            }
+            
+            const formData = new FormData(e.target);
+            const submitBtn = e.target.querySelector('button[type="submit"]');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Registering...';
+            
+            fetch('/register', { 
+                method: 'POST', 
+                body: new URLSearchParams(formData),
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                credentials: 'same-origin'
+            })
+            .then(res => res.json().then(data => ({status: res.status, data: data})))
+            .then(({status, data}) => {
+                if (data.success) {
+                    alert(data.message);
+                    e.target.reset();
+                    switchToLogin();
+                    document.getElementById('loginForm').reset();
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Register';
+                } else {
+                    throw new Error(data.message || 'Registration failed');
+                }
+            })
+            .catch(err => { 
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Register';
+                alert('Error: ' + err.message);
+            });
+        });
+        
+        // Close modals with Escape key
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeLoginModal(); closeRegisterModal(); } });
+    </script>
 </body>
 </html>
