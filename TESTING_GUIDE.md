@@ -1,19 +1,33 @@
-# 🧪 Testing Guide - Multi-Exchange Implementation
+# 🧪 Complete Testing Guide - MindRiskControl Trading Platform
 
-## Quick Start
+**Last Updated:** April 4, 2026  
+**Version:** 2.0 - Complete with MARKET/LIMIT orders, validation, and position management
 
-### Step 1: Run the Application
+---
+
+## Quick Start (5 minutes)
+
+### Step 1: Start the App
 ```bash
 cd "c:/Users/isalo/Downloads/mindriskcontrol/Trade-flask-fixed (1)"
 python app.py
 ```
+Wait for: `Running on http://127.0.0.1:5000`
 
-### Step 2: Open Browser
-Go to: `http://localhost:5000`
+### Step 2: Access Dashboard
+- Browser: `http://localhost:5000`
+- Register → Login → Subscribe → Connect Binance
+
+### Step 3: Start Testing
+```
+Left Panel: Trading controls
+Right Panel: Live positions, trade history, trade log
+TradingView Chart: Market data embedded
+```
 
 ---
 
-## Testing Flow
+## Pre-Testing Setup
 
 ### 1. Register a New Account
 - Click "Register" on homepage
