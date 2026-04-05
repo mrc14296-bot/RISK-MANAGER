@@ -1,3 +1,4 @@
+/* style.css */
 html, body {
     height: 100%;
     overflow: hidden;
@@ -24,7 +25,7 @@ body {
 }
 
 .panel {
-    padding: 8px;
+    padding: 15px;
     border: 2px solid #064d64;
     border-radius: 8px;
     background: #0e1419;
@@ -168,65 +169,6 @@ input, select {
 .place:hover {
     background: #00b8ff;
 }
-/* style.css */
-html, body {
-    height: 100%;
-    overflow: hidden;
-}
-
-body {
-    background: #0b0f12;
-    color: #e6e6e6;
-    margin: 0;
-    font-family: Arial, sans-serif;
-    font-size: 14px;
-    -webkit-font-smoothing: antialiased;
-}
-
-.container {
-    padding: 8px;
-    display: flex;
-    flex-direction: row;
-    gap: 10px;
-    height: calc(100vh - 14px);
-    box-sizing: border-box;
-    max-width: 1600px;
-    margin: 7px auto;
-}
-
-.panel {
-    padding: 15px;
-    border: 2px solid #064d64;
-    border-radius: 8px;
-    background: #0e1419;
-    display: flex;
-    flex-direction: column;
-    box-sizing: border-box;
-    overflow: hidden;
-}
-
-.panel.left { 
-    flex: 0 0 700px; 
-    min-width: 360px; 
-    max-width: 900px; 
-    overflow: auto; 
-}
-
-.panel.right { 
-    flex: 1 1 420px; 
-    min-width: 380px; 
-    overflow: visible; 
-    display: flex; 
-    flex-direction: column; 
-}
-
-.header {
-    font-weight: bold;
-    color: #0ca7d4;
-    margin-bottom: 10px;
-    border-bottom: 1px solid #0ca7d4;
-    padding-bottom: 5px;
-}
 
 .form-control {
     width: 100%;
@@ -253,7 +195,6 @@ body {
 .btn-short { background: #ff5757; }
 .btn-short:hover { background: #e04a4a; }
 
-.message { padding: 10px; border-radius: 4px; margin-bottom: 10px; }
 .success { background: rgba(0, 255, 153, 0.1); border: 1px solid #00ff99; color: #00ff99; }
 .error { background: rgba(255, 87, 87, 0.1); border: 1px solid #ff5757; color: #ff5757; }
 
@@ -276,16 +217,12 @@ table td {
     border: 1px solid #333; 
 }
 
-.panel.left::-webkit-scrollbar { display: none; }
-.panel.left { -ms-overflow-style: none; scrollbar-width: none; }
-
 .place:disabled {
     background: #444;
     border-color: #666;
     cursor: not-allowed;
 }
 
-/* Close All Positions Button */
 .close-all-btn {
     background: #4d1a1a;
     color: #ff4d4d;
@@ -304,7 +241,6 @@ table td {
     color: #000;
 }
 
-/* CSV Download Button */
 .csv-download-btn {
     background: #1a4d2e;
     color: #00ff88;
@@ -383,24 +319,6 @@ table td {
     scrollbar-width: none; 
 }
 
-table { 
-    width: 100%; 
-    border-collapse: collapse; 
-    font-size: 0.9em; 
-}
-
-table th { 
-    background: #0a5168; 
-    color: white; 
-    padding: 6px; 
-    border: 1px solid #0ca7d4; 
-}
-
-table td { 
-    padding: 6px; 
-    border: 1px solid #333; 
-}
-
 .long { 
     color: #00ff99; 
     font-weight: bold; 
@@ -416,7 +334,6 @@ table td {
     opacity: 0.8; 
 }
 
-/* Custom scrollbar for position container */
 #live_positions::-webkit-scrollbar,
 #trade_history::-webkit-scrollbar {
     width: 6px;
@@ -438,7 +355,6 @@ table td {
     background: #00b7ff;
 }
 
-/* Small screens: stack panels */
 @media (max-width: 900px) {
     .container { 
         flex-direction: column; 
@@ -457,6 +373,3 @@ table td {
         overflow: auto; 
     }
 }
-
-
-/* Paste this into your style.css or <style> block for index.html */
