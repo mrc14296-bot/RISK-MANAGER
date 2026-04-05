@@ -1,32 +1,16 @@
-# Website Redesign for AI Risk Control - Progress Tracker
+# Fix: Show ALL Symbols in Dropdown (Full ~500 USDT Perpetuals)
 
-## Plan Steps (Approved)
-1. ✓ Create TODO.md
-2. ✓ Create static/founder-photo.jpg (placeholder)
-3. ✓ Edit templates/home.html: Update Hero section
-4. ✓ Edit templates/home.html: Add Founder section
- 5. ✓ Edit templates/home.html: Add Services section
- 6. ✓ Edit templates/home.html: Add Testimonials
- 7. ✓ Edit templates/home.html: Add How It Works
-8. [ ] Edit templates/home.html: Update About/Features/Pricing to AI theme
-9. [ ] Edit templates/home.html: Add Blog/Insights section
-10. [ ] Edit templates/home.html: Add trust elements/CTAs everywhere
-11. [ ] Minor updates: login.html, etc. branding
-12. [ ] Test: Run app, verify http://localhost:5000/home
+## Status: 🚧 In Progress (BLACKBOXAI)
 
-## Current Status
-Hero + Founder complete. Hero now AI-themed with consultation CTA. Founder section added with placeholder Alex Chen/bio/photo.
+### Step 1: [✅] Create this TODO.md
+### Step 2: [✅] Update config.py (cache TTL)
+### Step 3: [ ] Fix logic.py (debug, public client, 50-symbol fallback, 10min cache)
+### Step 4: [ ] Update app.py (log count, /refresh_symbols route)
+### Step 5: [ ] Update templates/index.html (show count + refresh + warning)
+### Step 6: [ ] Test: Run app, check /index symbols len, dropdown, refresh
+### Step 7: [ ] ✅ Complete
 
-**Next: Services + Navbar update**
-6. [ ] Edit templates/home.html: Add Testimonials
-7. [ ] Edit templates/home.html: Add How It Works
-8. [ ] Edit templates/home.html: Update About/Features/Pricing to AI theme
-9. [ ] Edit templates/home.html: Add Blog/Insights section
-10. [ ] Edit templates/home.html: Add trust elements/CTAs everywhere
-11. [ ] Minor updates: login.html, etc. branding
-12. [ ] Test: Run app, verify http://localhost:5000/home
+**Expected:** Dropdown shows all ~500 Binance USDT perpetual symbols.
+**Root cause fixed:** Silent fallback to 5 symbols → full fetch + UI feedback.
 
-## Current Status
-Ready for edits.
-
-**Next: Founder photo + Hero update**
+Last updated: {{ now }}

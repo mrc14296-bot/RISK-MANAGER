@@ -5,7 +5,7 @@ from authlib.integrations.flask_client import OAuth
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 from functools import wraps
-from models import db, User, ExchangeConnection, SubscriptionHistory
+from models import db, User, ExchangeConnection, SubscriptionHistory, TradeDailyStats, TradeLog
 import logic
 import config
 import os
@@ -745,17 +745,39 @@ def partial_close_api():
     result = logic.partial_close_position(symbol, close_percent, close_qty, current_user.id)
     return jsonify(result)
 
-@app.route("/update_sl", methods=["POST"])
+@app.route("/api/trail_sl", methods=["POST"])
+@login_required
+@subscription_required
+def trail_sl_api():
+    """Dynamic trailing SL"""
+    data = request.get_json()
+    symbol = data.get('symbol')
+    if not symbol:
+        return jsonify({"success": False, "message": "Symbol required"}), 400
+    result = logic.trail_stop_loss(symbol, current_user.id)
+    return jsonify(result)
+
+@app.route("/api/live_pnl/<symbol>")
+@login_required
+@subscription_required
+def live_pnl_api(symbol):
+    """Live PnL for symbol"""
+    result = logic.get_live_pnl(symbol, current_user.id)
+    return jsonify(result)
+
+@app.route("/api/today_stats")
+@login_required
+@subscription_required
+def today_stats_api():
+    """Daily limits"""
+    stats = logic.get_today_stats(current_user.id)
+    return jsonify(stats)
+
+@app.route("/update_sl", methods=["POST"])  # Legacy
 @login_required
 @subscription_required
 def update_sl_api():
-    data = request.get_json()
-    symbol = data.get('symbol')
-    new_sl_percent = float(data.get('new_sl_percent', 0))
-    if not symbol:
-        return jsonify({"success": False, "message": "Symbol required"})
-    result = logic.update_stop_loss(symbol, new_sl_percent, current_user.id)
-    return jsonify(result)
+    return trail_sl_api()
 
 @app.route("/download_trades")
 @login_required
@@ -779,7 +801,9 @@ def download_trades():
 def index():
     logic.initialize_session()
     symbols = logic.get_all_exchange_symbols(current_user.id)
+    print(f"🌟 DEBUG /index: Loaded {len(symbols)} symbols for user {current_user.id}")
     
+    symbols_len = len(symbols)
     # FIXED: Enhanced diagnostics + wallet status
     balance_data = logic.get_live_balance(current_user.id)
     balance = 0.0
@@ -806,6 +830,10 @@ def index():
     }
     
     print(f"📊 /index wallet_debug: {wallet_debug}")
+    
+    # FIXED: Add missing today_stats computation
+    today_stats = logic.get_today_stats(current_user.id)
+    
     # -------------------------------------
 
     selected_symbol = request.form.get("symbol", "BTCUSDT")
@@ -830,21 +858,6 @@ def index():
     sizing = logic.calculate_position_sizing(unutilized, entry, sl_type, sl_val, side)
     trade_status = session.pop("trade_status", None)
 
-    if request.method == "POST" and "place_order" in request.form and not sizing.get("error"):
-        can_trade, limit_message = logic.can_open_trade(selected_symbol)
-        if not can_trade:
-            session["trade_status"] = {"success": False, "message": f"❌ {limit_message}"}
-            return redirect(url_for("index"))
-
-        result = logic.execute_trade_action(
-            balance, selected_symbol, side, entry, order_type, sl_type, sl_val, sizing,
-            float(request.form.get("user_units") or 0), float(request.form.get("user_lev") or 0),
-            margin_mode, tp1, tp1_pct, tp2, current_user.id
-        )
-        session["trade_status"] = result
-        return redirect(url_for("index"))
-    
-    today_stats = logic.get_today_stats()
     
     return render_template(
         "index.html",

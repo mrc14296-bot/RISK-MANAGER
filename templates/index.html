@@ -66,11 +66,26 @@
             </div>
             {% endif %}
 
-            <!-- Display trade limits -->
-            <div class="status" style="background: #1a1a2e; border-color: #16213e; margin-bottom: 10px;">
-                <strong>Daily Limits:</strong> 
-                <span id="total_trades_display">{{today_stats.total_trades}}/{{today_stats.max_trades}}</span> total trades | 
-                <span id="symbol_trades_display">{{ today_stats.symbol_trades.get(selected_symbol, 0) if today_stats.symbol_trades else 0 }}/{{today_stats.max_per_symbol}}</span> trades for {{selected_symbol}}
+            <!-- Enhanced Risk Control + Limits -->
+            <div class="risk-control">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <label>🔒 Risk % (1% Default)</label>
+                    <input type="range" id="risk_slider" min="0.5" max="2" step="0.1" value="1" onchange="updateRiskSizing()" style="width: 120px;">
+                    <span id="risk_pct_display">1.0%</span>
+                </div>
+                <div id="risk-preview" class="risk-preview" style="display: none;">
+                    <strong>✅ Suggested Trade (1% Risk)</strong><br>
+                    <span>Risk: $<span id="risk_amount">0</span> | Pos: <span id="risk_qty">0</span> units</span><br>
+                    <span>Leverage: <span id="risk_lev">0</span>x (Max Safe)</span>
+                </div>
+            </div>
+
+            <!-- Persistent Daily Limits -->
+            <div class="status">
+                <strong>📊 Daily Limits (Persistent):</strong><br>
+                Total: <span id="total_trades_display">{{today_stats.total_trades}}/{{today_stats.max_trades}}</span> trades 
+                <div class="limit-bar"><div class="limit-{{ 'green' if today_stats.total_trades < today_stats.max_trades else 'red' }}" style="width: {{ (today_stats.total_trades / today_stats.max_trades * 100) }}%;"></div></div>
+                <br>{{selected_symbol}}: <span id="symbol_trades_display">{{ today_stats.symbol_trades.get(selected_symbol, 0) if today_stats.symbol_trades else 0 }}/{{today_stats.max_per_symbol}}</span>
             </div>
 
             <div class="row">
@@ -198,17 +213,16 @@
             <div class="status-box">
                 {% if not sizing.error %}
                     <div class="formula" style="background: #06212a; padding: 10px; border-radius: 4px; border: 1px solid #0ca7d4; margin-top: 10px;">
-                        <b style="color: #00b7ff;">📐 Precision Logic:</b><br>
+                        <b style="color: #00b7ff;">📐 1% Risk Precision Logic:</b><br>
                         <span style="font-size: 0.85em;">
-                            • <b>Risk:</b> ${{ sizing.risk_amount }} (1%)<br>
-                            • <b>SL %:</b> {{ sizing.sl_percent }}%<br>
-                            • <b>Max Lev:</b> {{ sizing.suggested_leverage }}x [100 / (SL% + 0.2)]<br>
-                            • <b>Pos Value:</b> ${{ sizing.suggested_position_value }}<br>
-                            • <b>Pos Size:</b> {{ sizing.suggested_units }} units<br>
+                            • <b>Risk Amount:</b> ${{ sizing.risk_amount | round(2) }} ({{ sizing.risk_amount / unutilized * 100 | round(1) }}% of ${{ unutilized | round(2) }} pool)<br>
+                            • <b>SL Distance:</b> {{ sizing.sl_percent }}% ({{ sizing.sl_distance | round(4) }} points)<br>
+                            • <b>Safe Leverage:</b> {{ sizing.suggested_leverage }}x<br>
+                            • <b>Position Value:</b> ${{ sizing.suggested_position_value | round(2) }} ({{ sizing.suggested_units | round(6) }} units @ ${{ default_entry | round(4) }})<br>
                             {% if default_tp1_mode == 'TP1 % Movement' and default_tp1_value > 0 %}
-                                • <b>TP1 Target:</b> ${{ tp1 | round(6) }} ({{ default_tp1_value }}% movement)<br>
+                                • <b>TP1:</b> ${{ tp1 | round(6) }} ({{ default_tp1_value }}% move)<br>
                             {% endif %}
-                            • <b>Formula:</b> (Risk / (SL% + 0.2)) × 100
+                            • <b>Formula:</b> Pos = (Risk / (SL% + 0.2% buffer)) × 100 | Lev = 100 / (SL% + 0.2)
                         </span>
                     </div>
                 {% else %}
@@ -351,22 +365,24 @@
     }
 
     function updateLiveTradeLog() {
-        fetch('/get_trade_events')
+        fetch('/api/trade_logs')
         .then(r => r.json())
         .then(data => {
             const container = document.getElementById('live_trade_log');
             if (data.events && data.events.length > 0) {
                 let html = '';
                 data.events.forEach(event => {
-                    const eventColor = event.type === 'TRADE_OPEN' ? '#00ff88' : 
+                    const eventColor = event.type === 'TRADE_OPEN' || event.type === 'TRAIL_SL' ? '#00ff88' : 
                                       event.type === 'TRADE_CLOSE' ? '#ff4444' : 
                                       event.type === 'SL_UPDATE' ? '#ffaa00' : '#ffffff';
+                    const pnlColor = event.pnl >= 0 ? '#00ff88' : '#ff4444';
                     html += `<div style="padding: 4px 0; border-bottom: 1px solid #333; font-size: 10px; color: ${eventColor};">
                         <strong>${event.timestamp}</strong> | ${event.message}
+                        ${event.pnl !== undefined ? `<span style="color: ${pnlColor}; font-weight: bold;"> PnL: ${event.pnl.toFixed(2)}$</span>` : ''}
                     </div>`;
                 });
                 container.innerHTML = html;
-                container.scrollTop = 0; // Scroll to top for latest events
+                container.scrollTop = 0;
             }
         });
     }
@@ -574,7 +590,7 @@
     }
 
     function updateTradeLimits() {
-        fetch('/get_today_stats').then(r => r.json()).then(data => {
+        fetch('/api/today_stats').then(r => r.json()).then(data => {
             document.getElementById('total_trades_display').textContent = `${data.total_trades}/${data.max_trades}`;
             const selectedSymbol = document.querySelector('select[name="symbol"]').value || '';
             const symbolCount = data.symbol_trades && data.symbol_trades[selectedSymbol] ? data.symbol_trades[selectedSymbol] : 0;
@@ -583,6 +599,33 @@
                 symbolDisplay.textContent = `${symbolCount}/${data.max_per_symbol}`;
             }
         });
+    }
+
+    function updateRiskSizing() {
+        const slider = document.getElementById('risk_slider');
+        const pct = parseFloat(slider.value);
+        document.getElementById('risk_pct_display').textContent = pct.toFixed(1) + '%';
+        
+        // Recalc preview using server sizing logic approximation
+        const unutilizedEl = document.querySelector('#wallet-display input');
+        const unutilized = parseFloat(unutilizedEl ? unutilizedEl.value : 0) || 0;
+        const slValue = parseFloat(document.querySelector('input[name="sl_value"]').value) || 1;
+        const entry = parseFloat(document.getElementById('entry_input').value) || 60000;
+        
+        if (unutilized > 0 && slValue > 0 && entry > 0) {
+            const risk = unutilized * (pct / 100);
+            const sl_pct = Math.abs(slValue / entry) * 100;  // Approx SL%
+            const lev = Math.max(1, Math.floor(100 / (sl_pct + 0.2)));
+            const pos_value = (risk / (sl_pct / 100 + 0.002)) * 100;
+            const qty = pos_value / entry;
+            
+            document.getElementById('risk_amount').textContent = risk.toFixed(2);
+            document.getElementById('risk_qty').textContent = qty.toFixed(4);
+            document.getElementById('risk_lev').textContent = lev;
+            document.getElementById('risk-preview').style.display = 'block';
+        } else {
+            document.getElementById('risk-preview').style.display = 'none';
+        }
     }
     // Auto refresh intervals - OPTIMIZED for performance
     setInterval(updateLivePrice, 5000);     // Price 5s (was 1s - too frequent for external API)

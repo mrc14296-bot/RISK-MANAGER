@@ -7,6 +7,7 @@ import math
 import traceback
 import time
 import requests
+from models import db, TradeDailyStats, TradeLog
 
 # Global variables - Default client (for demo/fallback)
 _default_client = None
@@ -197,8 +198,6 @@ def get_all_exchange_symbols(user_id=None):
     global _symbol_cache, _symbol_cache_time
     now = time.time()
     
-    if _symbol_cache and (now - _symbol_cache_time < 1800):
-        return _symbol_cache
 
     try:
         client = get_client(user_id)
@@ -492,42 +491,102 @@ def round_price(symbol, price, user_id=None):
             return round(price - (price % tick), precision)
     return round(price, 2)
 
-def calculate_position_sizing(unutilized_margin, entry, sl_type, sl_value, side="LONG"):
+# NEW: Fetch maximum leverage allowed by Binance for a specific symbol
+_leverage_cache = {}
+_leverage_cache_time = {}
+
+def get_max_leverage(symbol, user_id=None):
+    """
+    Fetch the maximum leverage allowed by Binance for a specific symbol.
+    Caches results for 5 minutes to avoid API spam.
+    Returns exchange max (e.g., 20x for some alts) or 125 fallback.
+    """
+    global _leverage_cache, _leverage_cache_time
+    now = time.time()
+    cache_key = f"{symbol}_{user_id or 'public'}"
+    
+    # Return cached if fresh (<5min)
+    if cache_key in _leverage_cache and (now - _leverage_cache_time.get(cache_key, 0)) < 300:
+        return _leverage_cache[cache_key]
+    
+    try:
+        client = get_client(user_id)
+        if not client:
+            print("⚠️ No client for leverage fetch, using 125x fallback")
+            return 125
+        
+        info = client.futures_exchange_info()
+        for s in info.get('symbols', []):
+            if (s.get('symbol') == symbol and 
+                s.get('status') == 'TRADING' and 
+                s.get('contractType') == 'PERPETUAL'):
+                
+                max_lev = int(float(s.get('maxLeverage', 125)))
+                # Cache result
+                _leverage_cache[cache_key] = max_lev
+                _leverage_cache_time[cache_key] = now
+                print(f"✅ {symbol} Binance max leverage: {max_lev}x")
+                return max_lev
+        
+        print(f"⚠️ {symbol} not found in exchange info, 125x fallback")
+        return 125
+        
+    except Exception as e:
+        print(f"❌ Leverage fetch error for {symbol}: {e}, using 125x")
+        return 125
+
+def calculate_position_sizing(unutilized_margin, entry, sl_type, sl_value, side="LONG", user_id=None, symbol=None):
+    import config
     if entry <= 0:
         return {"error": "Invalid Entry Price"}
 
     if sl_value <= 0:
-        return {"error": "SL is mandatory and must be greater than 0"}
+        return {"error": "SL is MANDATORY - cannot trade without SL"}
 
-    risk_amount = unutilized_margin * (config.MAX_RISK_PERCENT / 100)
+    # STRICT 1% RISK
+    risk_amount = unutilized_margin * (config.RISK_PER_TRADE / 100.0)
 
     if sl_type == "SL % Movement":
         sl_percent = sl_value
-        sl_distance = abs(entry * (sl_value / 100))
+        sl_distance = abs(entry * (sl_value / 100.0))
     else:
         if side == "LONG" and sl_value >= entry:
-            return {"error": "For LONG trades SL must be below entry price"}
+            return {"error": "LONG SL must be < entry"}
         if side == "SHORT" and sl_value <= entry:
-            return {"error": "For SHORT trades SL must be above entry price"}
+            return {"error": "SHORT SL must be > entry"}
         sl_distance = abs(entry - sl_value)
-        sl_percent = (sl_distance / entry) * 100
+        sl_percent = (sl_distance / entry) * 100.0
 
     if sl_distance <= 0:
-        return {"error": "Invalid SL distance"}
+        return {"error": "Invalid SL (0 distance)"}
 
-    calculated_leverage = 100 / (sl_percent + 0.2)
-    max_leverage = min(int(calculated_leverage), 125)
-    pos_value_usdt = (risk_amount / (sl_percent + 0.2)) * 100
+    calculated_leverage = 100.0 / (sl_percent + 0.2)
+    
+    # NEW: Get actual Binance max leverage for symbol (defaults to BTCUSDT)
+    symbol_for_lev = side.replace('LONG', 'BTCUSDT').replace('SHORT', 'BTCUSDT')
+    exchange_max_lev = get_max_leverage(symbol_for_lev, user_id=None)  # No user_id needed for public info
+    
+    # FINAL: Cap by risk-calc, exchange limit, and absolute max
+    final_max_leverage = min(int(calculated_leverage), exchange_max_lev, 125)
+    
+    pos_value_usdt = (risk_amount / ((sl_percent / 100.0) + 0.002)) * 100.0
     position_size = pos_value_usdt / entry
 
     return {
-        "suggested_units": round(position_size, 6),
-        "suggested_leverage": max_leverage,
-        "max_leverage": max_leverage,
+        "suggested_units": round_qty(symbol_for_lev, position_size),  # Use proper symbol
+        "suggested_leverage": final_max_leverage,
+        "max_leverage": final_max_leverage,
+        "exchange_max_leverage": exchange_max_lev,  # NEW: For UI display
+        "leverage_breakdown": {  # NEW: Debug info
+            "risk_based": int(calculated_leverage),
+            "exchange_max": exchange_max_lev,
+            "final": final_max_leverage
+        },
         "suggested_position_value": round(pos_value_usdt, 2),
         "risk_amount": round(risk_amount, 2),
         "sl_percent": round(sl_percent, 3),
         "sl_distance": round(sl_distance, 6),
+        "risk_pct": config.RISK_PER_TRADE,
         "error": None
     }
 
@@ -611,138 +670,151 @@ def get_open_orders_for_symbol(symbol, user_id=None):
     except Exception:
         return []
 
-def update_trade_stats(symbol):
+def get_user_daily_stats(user_id):
+    """Get or create today's stats from DB"""
     today = datetime.utcnow().date().isoformat()
-    if "stats" not in session:
-        session["stats"] = {}
-    if today not in session["stats"]:
-        session["stats"][today] = {"total": 0, "symbols": {}}
+    stat = TradeDailyStats.get_for_user(user_id, today)
+    db.session.commit()
+    return stat
 
-    session["stats"][today]["total"] += 1
-    session["stats"][today]["symbols"][symbol] = session["stats"][today]["symbols"].get(symbol, 0) + 1
-    session.modified = True
+def update_trade_stats(symbol, user_id):
+    """Update trade stats in DB"""
+    stat = get_user_daily_stats(user_id)
+    stat.total_trades += 1
+    symbols = stat.get_symbol_trades()
+    symbols[symbol] = symbols.get(symbol, 0) + 1
+    stat.set_symbol_trades(symbols)
+    db.session.commit()
 
 
-def can_open_trade(symbol):
-    stats = get_today_stats()
-    if stats.get("total_trades", 0) >= config.MAX_TRADES_PER_DAY:
-        return False, f"Daily limit of {config.MAX_TRADES_PER_DAY} trades reached"
-    if stats.get("symbol_trades", {}).get(symbol, 0) >= config.MAX_TRADES_PER_SYMBOL_PER_DAY:
-        return False, f"Daily limit of {config.MAX_TRADES_PER_SYMBOL_PER_DAY} trades for {symbol} reached"
+def can_open_trade(symbol, user_id):
+    stat = get_user_daily_stats(user_id)
+    if stat.total_trades >= config.MAX_TRADES_PER_DAY:
+        return False, f"Daily limit of {config.MAX_TRADES_PER_DAY} trades reached ({stat.total_trades}/{config.MAX_TRADES_PER_DAY})"
+    symbols = stat.get_symbol_trades()
+    sym_count = symbols.get(symbol, 0)
+    if sym_count >= config.MAX_TRADES_PER_SYMBOL_PER_DAY:
+        return False, f"Daily limit of {config.MAX_TRADES_PER_SYMBOL_PER_DAY} trades for {symbol} reached ({sym_count}/{config.MAX_TRADES_PER_SYMBOL_PER_DAY})"
     return True, None
+
+def get_today_stats(user_id):
+    stat = get_user_daily_stats(user_id)
+    symbols = stat.get_symbol_trades()
+    return {
+        "total_trades": stat.total_trades,
+        "max_trades": config.MAX_TRADES_PER_DAY,
+        "symbol_trades": symbols,
+        "max_per_symbol": config.MAX_TRADES_PER_SYMBOL_PER_DAY
+    }
 
 
 def execute_trade_action(balance, symbol, side, entry, order_type, sl_type, sl_value, sizing, user_units, user_lev, margin_mode, tp1, tp1_pct, tp2, user_id=None):
+    from models import TradePosition, db
+    import config
     global _positions_cache_time
     client = get_client(user_id)
     if not client: 
-        return {"success": False, "message": "❌ Connection Failed - Please connect your exchange account"}
+        return {"success": False, "message": "❌ No Binance connection"}
     
     try:
+        # STRICT MANDATORY SL CHECK
+        if sl_value <= 0:
+            return {"success": False, "message": "🚫 SL MANDATORY - Cannot trade without Stop Loss (1% risk)"}
+
         if entry <= 0:
             return {"success": False, "message": "❌ Invalid entry price"}
 
         if order_type not in ["MARKET", "LIMIT"]:
-            return {"success": False, "message": "❌ Only MARKET and LIMIT orders are supported"}
+            return {"success": False, "message": "❌ MARKET/LIMIT only"}
 
         if order_type == "LIMIT" and entry <= 0:
-            return {"success": False, "message": "❌ LIMIT orders require a valid entry price"}
+            return {"success": False, "message": "❌ LIMIT needs entry price"}
 
+        # 1% STRICT ENFORCEMENT - NO OVERRIDES
         suggested_units = sizing.get("suggested_units", 0)
-        suggested_leverage = sizing.get("max_leverage", 1)
+        suggested_leverage = sizing.get("suggested_leverage", 1)
+        if user_units > suggested_units:
+            return {"success": False, "message": f"🚫 Qty > 1% risk max ({suggested_units:.6f} units)"}
+        if user_lev > suggested_leverage:
+            return {"success": False, "message": f"🚫 Lev > safe max ({suggested_leverage}x for 1% risk)"}
 
-        if user_units > 0 and user_units > suggested_units:
-            return {"success": False, "message": f"Qty override exceeds allowed size ({suggested_units})"}
-        if user_lev > 0 and user_lev > suggested_leverage:
-            return {"success": False, "message": f"Leverage override exceeds allowed max ({suggested_leverage}x)"}
-
-        qty = round_qty(symbol, user_units if user_units > 0 else suggested_units, user_id)
+        qty = round_qty(symbol, user_units or suggested_units, user_id)
         if qty <= 0:
-            return {"success": False, "message": "❌ Calculated order quantity is too small. Increase your risk pool or SL distance."}
+            return {"success": False, "message": "❌ Qty too small (below min notional)"}
 
         required_qty = get_required_order_qty(symbol, entry, user_id)
         if qty < required_qty:
-            min_notional = get_min_notional(symbol, user_id)
-            return {
-                "success": False,
-                "message": f"❌ Order quantity too small for Binance minimum requirements. Minimum for {symbol} is {required_qty} units (notional ≥ {min_notional} USDT)."
-            }
+            return {"success": False, "message": f"❌ Below Binance min ({required_qty:.6f} units)"}
 
-        lev = int(user_lev) if user_lev > 0 else suggested_leverage
+        lev = int(user_lev or suggested_leverage)
         
-        try:
-            client.futures_change_leverage(symbol=symbol, leverage=lev)
-            client.futures_change_margin_type(symbol=symbol, marginType=margin_mode)
-        except Exception:
-            pass
+        # Limits check
+        can_trade, limit_msg = can_open_trade(symbol, user_id)
+        if not can_trade:
+            return {"success": False, "message": limit_msg}
+
+        # Set leverage/margin
+        client.futures_change_leverage(symbol=symbol, leverage=lev)
+        client.futures_change_margin_type(symbol=symbol, marginType=margin_mode)
 
         e_side = Client.SIDE_BUY if side == "LONG" else Client.SIDE_SELL
         x_side = Client.SIDE_SELL if side == "LONG" else Client.SIDE_BUY
         
+        # Calc SL price
         if sl_type == "SL % Movement":
-            calculated_sl = entry * (1 - (sl_value / 100)) if side == "LONG" else entry * (1 + (sl_value / 100))
+            calculated_sl = entry * (1 - sl_value/100) if side == "LONG" else entry * (1 + sl_value/100)
         else:
             calculated_sl = sl_value
-
         sl_p = round_price(symbol, calculated_sl, user_id)
-        
-        # Create main order (MARKET or LIMIT)
-        order_params = {
-            "symbol": symbol,
-            "side": e_side,
-            "type": order_type,
-            "quantity": qty
-        }
-        
+
+        # MAIN ORDER
+        order_params = {"symbol": symbol, "side": e_side, "type": order_type, "quantity": qty}
         if order_type == "LIMIT":
             order_params["price"] = round_price(symbol, entry, user_id)
             order_params["timeInForce"] = "GTC"
-        
         client.futures_create_order(**order_params)
         time.sleep(0.5)
-        # Invalidate caches after trade execution
-        cache_key_positions = f"positions_{user_id or 'public'}"
-        cache_key_trades = f"trade_history_{user_id or 'public'}"
-        if cache_key_positions in _positions_cache:
-            del _positions_cache[cache_key_positions]
-        if cache_key_trades in _trade_history_cache:
-            del _trade_history_cache[cache_key_trades]
 
-        try:
-            client.futures_create_order(
-                symbol=symbol, side=x_side, type="STOP_MARKET", 
-                stopPrice=sl_p, closePosition=True, workingType="MARK_PRICE"
-            )
-        except Exception as e:
-            print(f"❌ SL order failed: {e}")
+        # SL ORDER
+        client.futures_create_order(symbol=symbol, side=x_side, type="STOP_MARKET", 
+            stopPrice=sl_p, closePosition=True, workingType="MARK_PRICE")
 
-        if tp1 > 0 and ((side == "LONG" and tp1 > entry) or (side == "SHORT" and tp1 < entry)):
-            t1_qty = round_qty(symbol, qty * (tp1_pct / 100), user_id)
+        # TP1 PARTIAL
+        if tp1 > 0 and ((side=="LONG" and tp1>entry) or (side=="SHORT" and tp1<entry)):
+            t1_qty = round_qty(symbol, qty * (tp1_pct/100), user_id)
             if t1_qty > 0:
-                try: 
-                    client.futures_create_order(
-                        symbol=symbol, side=x_side, type="TAKE_PROFIT_MARKET", 
-                        stopPrice=round_price(symbol, tp1, user_id), quantity=t1_qty, 
-                        reduceOnly=True, workingType="MARK_PRICE"
-                    )
-                except Exception: pass
+                client.futures_create_order(symbol=symbol, side=x_side, type="TAKE_PROFIT_MARKET",
+                    stopPrice=round_price(symbol, tp1, user_id), quantity=t1_qty, reduceOnly=True, workingType="MARK_PRICE")
 
-        if tp2 > 0 and ((side == "LONG" and tp2 > entry) or (side == "SHORT" and tp2 < entry)):
-            try: 
-                client.futures_create_order(
-                    symbol=symbol, side=x_side, type="TAKE_PROFIT_MARKET", 
-                    stopPrice=round_price(symbol, tp2, user_id), closePosition=True, 
-                    workingType="MARK_PRICE"
-                )
-            except Exception: pass
+        # TP2 REMAINDER
+        if tp2 > 0 and ((side=="LONG" and tp2>entry) or (side=="SHORT" and tp2<entry)):
+            client.futures_create_order(symbol=symbol, side=x_side, type="TAKE_PROFIT_MARKET",
+                stopPrice=round_price(symbol, tp2, user_id), closePosition=True, workingType="MARK_PRICE")
 
-        update_trade_stats(symbol)
-        log_trade_event("TRADE_OPEN", f"✅ {side} {symbol} opened at ${entry:.4f}, SL: ${sl_p:.4f}, Qty: {qty}, Lev: {lev}x", user_id)
-        return {"success": True, "message": f"✅ {side} {symbol} Open. SL: {sl_p}"}
+        # CREATE DB POSITION RECORD
+        pos = TradePosition(
+            user_id=user_id, symbol=symbol, side=side,
+            entry_price=entry, initial_qty=qty, sl_price=calculated_sl,
+            tp1_price=tp1, tp1_qty_pct=tp1_pct, tp2_price=tp2,
+            current_sl=calculated_sl
+        )
+        db.session.add(pos)
+        db.session.commit()
+
+        # UPDATE STATS & LOG
+        update_trade_stats(symbol, user_id)
+        log_trade_event("TRADE_OPEN", f"✅ 1% RISK {side} {symbol} | Entry:${entry:.4f} SL:${sl_p:.4f} Qty:{qty} Lev:{lev}x", user_id)
+
+        # Cache invalidation
+        if f"positions_{user_id}" in _positions_cache: del _positions_cache[f"positions_{user_id}"]
+        if f"trade_history_{user_id}" in _trade_history_cache: del _trade_history_cache[f"trade_history_{user_id}"]
+
+        return {"success": True, "message": f"✅ {side} {symbol} executed (1% risk). DB tracked."}
         
     except Exception as e:
-        traceback.print_exc()
-        return {"success": False, "message": f"❌ Execution Error: {str(e)}"}
+        db.session.rollback()
+        log_trade_event("TRADE_FAIL", f"❌ {str(e)}", user_id)
+        return {"success": False, "message": f"❌ {str(e)}"}
 
 def partial_close_position(symbol, close_percent=None, close_qty=None, user_id=None):
     try:
@@ -799,33 +871,95 @@ def close_position(symbol, user_id=None):
     except Exception as e: 
         return {"success": False, "message": str(e)}
 
-def update_stop_loss(symbol, new_sl_percent, user_id=None):
+def trail_stop_loss(symbol, user_id=None):
+    """Dynamic trailing SL: positive only, max -1% loss from entry"""
+    from models import TradePosition, db
+    import config
     try:
-        if new_sl_percent < config.SL_EDIT_MIN_PERCENT or new_sl_percent > config.SL_EDIT_MAX_PERCENT:
-            return {"success": False, "message": f"SL movement must be between {config.SL_EDIT_MIN_PERCENT}% and {config.SL_EDIT_MAX_PERCENT}%"}
+        pos_db = TradePosition.query.filter_by(user_id=user_id, symbol=symbol, status='open').first()
+        if not pos_db: 
+            return {"success": False, "message": "No tracked open position"}
 
         client = get_client(user_id)
-        positions = client.futures_position_information(symbol=symbol)
-        pos = next((p for p in positions if abs(float(p.get('positionAmt', 0))) > 0), None)
-        if not pos: return {"success": False, "message": "No position"}
-        
-        amt = float(pos.get('positionAmt', 0))
-        entry = float(pos.get('entryPrice', 0))
-        price = round_price(symbol, entry * (1 + new_sl_percent/100) if amt > 0 else entry * (1 - new_sl_percent/100), user_id)
-        
-        orders = client.futures_get_open_orders(symbol=symbol)
-        for o in orders:
-            if o.get('type') in ['STOP_MARKET', 'STOP']:
-                client.futures_cancel_order(symbol=symbol, orderId=o.get('orderId'))
+        if not client: 
+            return {"success": False, "message": "No connection"}
 
-        client.futures_create_order(
-            symbol=symbol, side=Client.SIDE_SELL if amt > 0 else Client.SIDE_BUY,
-            type="STOP_MARKET", stopPrice=price, closePosition=True, workingType="MARK_PRICE"
-        )
-        log_trade_event("SL_UPDATE", f"SL updated to ${price:.4f} for {symbol}", user_id)
-        return {"success": True, "message": f"SL updated to {price}"}
+        positions = client.futures_position_information(symbol=symbol)
+        pos = next((p for p in positions if abs(float(p['positionAmt'] or 0)) > 0), None)
+        if not pos:
+            return {"success": False, "message": "No exchange position"}
+
+        entry = pos_db.entry_price
+        mark = float(pos['markPrice'] or 0)
+        current_sl = pos_db.current_sl
+        side = pos_db.side
+
+        if mark <= 0: 
+            return {"success": False, "message": "Invalid mark price"}
+
+        # TRAIL: Positive moves only, cap total loss at -1% entry
+        trail_pct = config.MAX_TRAIL_LOSS_PCT / 100.0
+        if side == 'LONG':
+            new_sl = max(current_sl, mark * (1 - trail_pct))
+            loss_cap = entry * (1 - trail_pct)
+            new_sl = min(new_sl, mark * 0.998)  # Tight buffer
+        else:
+            new_sl = min(current_sl, mark * (1 + trail_pct))
+            loss_cap = entry * (1 + trail_pct)
+            new_sl = max(new_sl, mark * 1.002)
+
+        new_sl = round_price(symbol, new_sl, user_id)
+        move_pct = abs((new_sl - current_sl) / entry * 100)
+
+        if move_pct > 0.05:  # Min 0.05% move
+            client.futures_create_order(
+                symbol=symbol, side="BOTH", type="STOP_MARKET",
+                stopPrice=new_sl, closePosition=True, workingType="MARK_PRICE"
+            )
+            pos_db.update_trail_sl(new_sl)
+            db.session.commit()
+            log_trade_event("TRAIL_SL", f"{symbol}: SL {current_sl:.4f}→{new_sl:.4f} ({move_pct:+.2f}%)", user_id)
+            return {"success": True, "sl_new": new_sl, "move": f"{move_pct:+.2f}%"}
+        return {"success": True, "message": "Trail optimal - no update"}
     except Exception as e:
+        db.session.rollback()
         return {"success": False, "message": str(e)}
+
+def update_stop_loss(symbol, new_sl_percent, user_id=None):
+    """Legacy - call trail_stop_loss for dynamic trailing"""
+    return trail_stop_loss(symbol, user_id)
+
+def get_live_pnl(symbol, user_id=None):
+    """Live PnL from DB position + exchange"""
+    from models import TradePosition, db
+    try:
+        pos_db = TradePosition.query.filter_by(user_id=user_id, symbol=symbol).order_by(TradePosition.updated_at.desc()).first()
+        if not pos_db:
+            return {"success": False, "error": "No position record"}
+
+        client = get_client(user_id)
+        if client:
+            positions = client.futures_position_information(symbol=symbol)
+            pos = next((p for p in positions if abs(float(p.get('positionAmt', 0))) > 0), None)
+            if pos:
+                unrealized = float(pos.get('unRealizedProfit', 0))
+                pos_db.unrealized_pnl = unrealized
+                db.session.commit()
+            else:
+                unrealized = pos_db.unrealized_pnl or 0
+        else:
+            unrealized = pos_db.unrealized_pnl or 0
+
+        roi_pct = (unrealized / (pos_db.initial_qty * pos_db.entry_price / pos_db.suggested_leverage)) * 100 if pos_db.initial_qty > 0 else 0
+        return {
+            "success": True, 
+            "pnl": unrealized, 
+            "roi_pct": round(roi_pct, 2), 
+            "status": pos_db.status, 
+            "sl_current": pos_db.current_sl
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 def get_trade_history(user_id=None):
     global _trade_history_cache, _trade_history_cache_time
@@ -857,8 +991,20 @@ def get_trade_history(user_id=None):
     except Exception: 
         return []
 
-def log_trade_event(event_type, message, user_id=None):
-    """Log a trade event for live monitoring"""
+def log_trade_event(event_type, message, user_id=None, pnl=0.0):
+    """Log a trade event for live monitoring - DB + Session"""
+    if user_id:
+        # DB Log
+        log_entry = TradeLog(
+            user_id=user_id,
+            event_type=event_type,
+            message=message,
+            pnl=float(pnl)
+        )
+        db.session.add(log_entry)
+        db.session.commit()
+    
+    # Session for live UI (fallback/hybrid)
     if "trade_events" not in session:
         session["trade_events"] = []
     
@@ -866,28 +1012,29 @@ def log_trade_event(event_type, message, user_id=None):
         "timestamp": datetime.utcnow().strftime("%H:%M:%S"),
         "type": event_type,
         "message": message,
-        "user_id": user_id
+        "user_id": user_id,
+        "pnl": pnl
     }
     
-    session["trade_events"].insert(0, event)  # Add to beginning for latest first
-    
-    # Keep only last 50 events
+    session["trade_events"].insert(0, event)
     if len(session["trade_events"]) > 50:
         session["trade_events"] = session["trade_events"][:50]
-    
     session.modified = True
 
 def get_trade_events(user_id=None):
-    """Get recent trade events"""
-    events = session.get("trade_events", [])
-    return events[:20]  # Return last 20 events
-
-def get_today_stats():
-    today = datetime.utcnow().date().isoformat()
-    stats = session.get("stats", {}).get(today, {"total": 0, "symbols": {}})
-    return {
-        "total_trades": stats.get("total", 0), 
-        "max_trades": config.MAX_TRADES_PER_DAY, 
-        "symbol_trades": stats.get("symbols", {}), 
-        "max_per_symbol": config.MAX_TRADES_PER_SYMBOL_PER_DAY
-    }
+    """Get recent trade events - DB primary + session"""
+    events = []
+    if user_id:
+        db_logs = TradeLog.get_recent(user_id, 30)
+        events = [{
+            "timestamp": log.timestamp.strftime("%H:%M:%S"),
+            "type": log.event_type,
+            "message": log.message,
+            "user_id": user_id,
+            "pnl": log.pnl
+        } for log in db_logs]
+    
+    # Merge with session (latest first)
+    session_events = session.get("trade_events", [])[:20]
+    all_events = events[:10] + session_events[:10]  # Hybrid top 20
+    return all_events
