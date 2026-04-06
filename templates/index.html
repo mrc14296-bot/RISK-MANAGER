@@ -392,11 +392,8 @@
 <script>
     // Real-time position update with enhanced PnL display
     function updateLivePositions() {
-        fetch('/get_open_positions', { credentials: 'same-origin' })
-        .then(r => {
-            if (!r.ok) throw new Error('Unable to load open positions');
-            return r.json();
-        })
+        fetch('/get_open_positions')
+        .then(r => r.json())
         .then(data => {
             const container = document.getElementById('live_positions');
             const header = document.getElementById('position_header');
@@ -446,19 +443,12 @@
             }
         }).catch(err => {
             console.error('Error updating positions:', err);
-            const container = document.getElementById('live_positions');
-            container.innerHTML = '<div style="text-align: center; color: #ff8c00; padding: 30px;">Unable to load open positions. Please refresh or check your connection.</div>';
-            const header = document.getElementById('position_header');
-            if (header) header.textContent = '📊 LIVE POSITIONS';
         });
     }
 
     function updateTradeHistory() {
-        fetch('/get_trade_history', { credentials: 'same-origin' })
-        .then(r => {
-            if (!r.ok) throw new Error('Unable to load trade history');
-            return r.json();
-        })
+        fetch('/get_trade_history')
+        .then(r => r.json())
         .then(data => {
             const container = document.getElementById('trade_history');
             if (data.trades && data.trades.length > 0) {
@@ -484,13 +474,11 @@
             }
         }).catch(err => {
             console.error('Error updating trade history:', err);
-            const container = document.getElementById('trade_history');
-            container.innerHTML = '<div style="text-align: center; color: #ff8c00; padding: 30px;">Unable to load trade history. Please refresh or check your connection.</div>';
         });
     }
 
     function updateLiveTradeLog() {
-        fetch('/get_trade_events', { credentials: 'same-origin' })
+        fetch('/get_trade_events')
         .then(r => r.json())
         .then(data => {
             const container = document.getElementById('live_trade_log');
@@ -535,8 +523,6 @@
             }
         }).catch(err => {
             console.error('Error updating trade log:', err);
-            const container = document.getElementById('live_trade_log');
-            container.innerHTML = '<div style="text-align: center; color: #ff8c00; padding: 60px;">Unable to load trade events.</div>';
         });
     }
 
@@ -546,11 +532,8 @@
         const indicator = document.getElementById('live-indicator');
         const resetBtn = document.getElementById('reset-live-btn');
         
-        fetch(`/get_live_price/${symbol}`, { credentials: 'same-origin' })
-        .then(r => {
-            if (!r.ok) throw new Error('Unable to load live price');
-            return r.json();
-        })
+        fetch(`/get_live_price/${symbol}`)
+        .then(r => r.json())
         .then(data => {
             if (data.price && data.price > 0) {
                 entryInput.value = data.price;
@@ -709,12 +692,7 @@
     }
 
     function updateTradeLimits() {
-        fetch('/api/today_stats', { credentials: 'same-origin' })
-        .then(r => {
-            if (!r.ok) throw new Error('Unable to load trade limits');
-            return r.json();
-        })
-        .then(data => {
+        fetch('/api/today_stats').then(r => r.json()).then(data => {
             document.getElementById('total_trades_display').textContent = `${data.total_trades}/${data.max_trades}`;
             const selectedSymbol = document.querySelector('select[name="symbol"]').value || '';
             const symbolCount = data.symbol_trades && data.symbol_trades[selectedSymbol] ? data.symbol_trades[selectedSymbol] : 0;
@@ -728,8 +706,6 @@
             const percentage = (data.total_trades / data.max_trades) * 100;
             limitBar.style.width = percentage + '%';
             limitBar.style.backgroundColor = data.total_trades < data.max_trades ? '#00ff88' : '#ff4444';
-        }).catch(err => {
-            console.error('Error updating trade limits:', err);
         });
     }
 
