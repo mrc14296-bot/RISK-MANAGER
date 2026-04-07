@@ -755,9 +755,49 @@ def execute_trade_action(balance, symbol, side, entry, order_type, sl_type, sl_v
         if not can_trade:
             return {"success": False, "message": limit_msg}
 
-        # Set leverage/margin
-        client.futures_change_leverage(symbol=symbol, leverage=lev)
-        client.futures_change_margin_type(symbol=symbol, marginType=margin_mode)
+        # Set leverage/margin with fallback handling
+        leverage_set = False
+        leverage_error = None
+        original_lev = lev
+        
+        # Try progressively lower leverage if initial fails
+        leverage_attempts = [lev] + [max(1, lev - i*10) for i in range(1, lev//10 + 1)] + [10, 5, 3, 2, 1]
+        leverage_attempts = list(dict.fromkeys(leverage_attempts))  # Remove duplicates
+        
+        for attempt_lev in leverage_attempts:
+            try:
+                client.futures_change_leverage(symbol=symbol, leverage=attempt_lev)
+                lev = attempt_lev
+                leverage_set = True
+                if attempt_lev < original_lev:
+                    print(f"⚠️ Leverage {original_lev}x rejected, using {attempt_lev}x instead")
+                break
+            except BinanceAPIException as e:
+                if e.code == 4028:  # Leverage not valid
+                    leverage_error = e
+                    continue
+                else:
+                    raise  # Re-raise other errors
+            except Exception as e:
+                leverage_error = e
+                continue
+        
+        if not leverage_set:
+            return {
+                "success": False, 
+                "message": f"❌ Leverage {original_lev}x is not available for {symbol} on your account. Error: {leverage_error}"
+            }
+        
+        # Try to set margin type
+        try:
+            client.futures_change_margin_type(symbol=symbol, marginType=margin_mode)
+        except BinanceAPIException as e:
+            if e.code == 4046:  # Already set to this mode
+                pass
+            else:
+                return {"success": False, "message": f"❌ Margin mode error: {str(e)}"}
+        except Exception as e:
+            return {"success": False, "message": f"❌ Margin mode error: {str(e)}"}
 
         e_side = Client.SIDE_BUY if side == "LONG" else Client.SIDE_SELL
         x_side = Client.SIDE_SELL if side == "LONG" else Client.SIDE_BUY
@@ -805,13 +845,16 @@ def execute_trade_action(balance, symbol, side, entry, order_type, sl_type, sl_v
 
         # UPDATE STATS & LOG
         update_trade_stats(symbol, user_id)
-        log_trade_event("TRADE_OPEN", f"✅ 1% RISK {side} {symbol} | Entry:${entry:.4f} SL:${sl_p:.4f} Qty:{qty} Lev:{lev}x", user_id)
+        
+        # Show if leverage was adjusted
+        lev_note = f" (Adjusted from {original_lev}x)" if lev < original_lev else ""
+        log_trade_event("TRADE_OPEN", f"✅ 1% RISK {side} {symbol} | Entry:${entry:.4f} SL:${sl_p:.4f} Qty:{qty} Lev:{lev}x{lev_note}", user_id)
 
         # Cache invalidation
         if f"positions_{user_id}" in _positions_cache: del _positions_cache[f"positions_{user_id}"]
         if f"trade_history_{user_id}" in _trade_history_cache: del _trade_history_cache[f"trade_history_{user_id}"]
 
-        return {"success": True, "message": f"✅ {side} {symbol} executed (1% risk). DB tracked."}
+        return {"success": True, "message": f"✅ {side} {symbol} executed (1% risk) @ {lev}x leverage{lev_note}. DB tracked."}
         
     except Exception as e:
         db.session.rollback()
