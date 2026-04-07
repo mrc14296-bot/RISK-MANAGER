@@ -381,12 +381,9 @@ def calculate_position_sizing(unutilized_balance, entry_price, sl_type, sl_value
         # Calculate quantity based on risk
         quantity = risk_amount / loss_per_unit
         
-        # Calculate required leverage
-        position_value = quantity * entry_price
-        if position_value > 0 and unutilized_balance > 0:
-            calculated_lev = position_value / unutilized_balance
-        else:
-            calculated_lev = 1
+        # Calculate leverage using the correct formula: Max Leverage = 100 / (SL% + 0.2)
+        sl_pct = (loss_per_unit / entry_price) * 100
+        calculated_lev = 100 / (sl_pct + 0.2)
         
         # Cap at 125x
         calculated_lev = min(calculated_lev, 125)
