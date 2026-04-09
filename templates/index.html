@@ -474,6 +474,12 @@
         const qty = document.querySelector('input[name="user_units"]').value || 'Auto';
         const lev = document.querySelector('input[name="user_lev"]').value || 'Auto';
         
+        // ✅ STRICT SL VALIDATION
+        if (!sl || parseFloat(sl) <= 0) {
+            alert('🚫 STOP LOSS MANDATORY!\n\nYou must enter a Stop Loss value:\n• SL % Movement: Enter percentage (e.g., 1 for 1%)\n• SL Points: Enter price level\n\nWithout SL, trades are NOT allowed.');
+            return false;
+        }
+        
         let message = `🔥 CONFIRM TRADE EXECUTION:\n\n`;
         message += `📊 ${symbol} ${side}\n`;
         message += `💰 Entry: $${parseFloat(entry).toFixed(4)}\n`;

@@ -719,9 +719,9 @@ def execute_trade_action(balance, symbol, side, entry, order_type, sl_type, sl_v
         return {"success": False, "message": "❌ No Binance connection"}
     
     try:
-        # STRICT MANDATORY SL CHECK
-        if sl_value <= 0:
-            return {"success": False, "message": "🚫 SL MANDATORY - Cannot trade without Stop Loss (1% risk)"}
+        # STRICT MANDATORY SL CHECK - Must be > 0
+        if not sl_value or sl_value <= 0:
+            return {"success": False, "message": "🚫 SL MANDATORY - You must set a Stop Loss value (1% minimum required)"}
 
         if entry <= 0:
             return {"success": False, "message": "❌ Invalid entry price"}
@@ -735,6 +735,13 @@ def execute_trade_action(balance, symbol, side, entry, order_type, sl_type, sl_v
         # 1% STRICT ENFORCEMENT - NO OVERRIDES
         suggested_units = sizing.get("suggested_units", 0)
         suggested_leverage = sizing.get("suggested_leverage", 1)
+        
+        # Handle empty/None user inputs
+        if not user_units or user_units <= 0:
+            user_units = suggested_units
+        if not user_lev or user_lev <= 0:
+            user_lev = suggested_leverage
+            
         if user_units > suggested_units:
             return {"success": False, "message": f"🚫 Qty > 1% risk max ({suggested_units:.6f} units)"}
         if user_lev > suggested_leverage:
@@ -746,7 +753,7 @@ def execute_trade_action(balance, symbol, side, entry, order_type, sl_type, sl_v
 
         required_qty = get_required_order_qty(symbol, entry, user_id)
         if qty < required_qty:
-            return {"success": False, "message": f"❌ Below Binance min ({required_qty:.6f} units)"}
+            return {"success": False, "message": f"❌ Below Binance min ({required_qty:.6f} units), got {qty:.6f}"}
 
         lev = int(user_lev or suggested_leverage)
         
@@ -808,6 +815,21 @@ def execute_trade_action(balance, symbol, side, entry, order_type, sl_type, sl_v
         else:
             calculated_sl = sl_value
         sl_p = round_price(symbol, calculated_sl, user_id)
+
+        # MARGIN REQUIREMENT CHECK
+        notional_value = float(qty) * float(entry)
+        margin_required = notional_value / float(lev)
+        available_margin = float(balance) * 0.95  # Use 95% to add safety buffer
+        
+        if margin_required > available_margin:
+            return {
+                "success": False,
+                "message": f"❌ Insufficient margin:\n"
+                           f"   Need: ${margin_required:.2f}\n"
+                           f"   Available: ${available_margin:.2f}\n"
+                           f"   Shortfall: ${margin_required - available_margin:.2f}\n"
+                           f"   Try: Lower quantity, reduce leverage, or increase stop loss %"
+            }
 
         # MAIN ORDER
         order_params = {"symbol": symbol, "side": e_side, "type": order_type, "quantity": qty}
