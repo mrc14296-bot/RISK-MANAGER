@@ -718,106 +718,148 @@
 
     // ✅ SHOW COIN DETAILS IN MODAL (WITH REAL-TIME DATA)
     function showCoinDetails() {
-        const symbol = document.querySelector('select[name="symbol"]').value;
-        const sl_type = document.querySelector('select[name="sl_type"]').value;
-        const sl_value = document.querySelector('input[name="sl_value"]').value || '1.5';
-        const side = document.querySelector('select[name="side"]').value;
-        
-        // Show loading state
-        const modal = document.getElementById('coin-details-modal');
-        document.getElementById('modal-symbol').textContent = '⏳ ' + symbol;
-        document.getElementById('modal-max-lev').textContent = '...';
-        document.getElementById('modal-sugg-lev').textContent = '...';
-        document.getElementById('modal-rec').innerHTML = '⏳ Fetching live data...';
-        document.getElementById('modal-position-details').innerHTML = '<div style="color: #888; font-size: 11px; padding: 8px; text-align: center;">⏳ Loading position data...</div>';
-        modal.style.display = 'flex';
-        
-        // Fetch with SL parameters for real-time calculation
-        fetch(`/api/coin-details/${symbol}?sl_type=${encodeURIComponent(sl_type)}&sl_value=${encodeURIComponent(sl_value)}&side=${encodeURIComponent(side)}`)
-            .then(r => r.json())
-            .then(data => {
-                try {
-                    if (data && data.success) {
-                        const pos = data.position;
-                        
-                        // Update basic info with REAL data
-                        document.getElementById('modal-symbol').textContent = symbol;
-                        document.getElementById('modal-max-lev').textContent = data.max_leverage || '125';
-                        document.getElementById('modal-sugg-lev').textContent = data.suggested_leverage || '45';
-                        
-                        // Show recommendations based on max leverage
-                        let recommendations = '';
-                        const maxLev = data.max_leverage || 125;
-                        if (maxLev <= 20) {
-                            recommendations = '🔴 Low leverage - Use 5-10% SL';
-                        } else if (maxLev <= 50) {
-                            recommendations = '🟡 Medium leverage - Use 2-5% SL';
-                        } else {
-                            recommendations = '🟢 High leverage - Use 1-2% SL';
-                        }
-                        if (data.sl_percent) {
-                            recommendations += ` | Current SL: ${data.sl_percent}%`;
-                        }
-                        document.getElementById('modal-rec').innerHTML = recommendations;
-                        
-                        // Show position details if open
-                        const posDetailsDiv = document.getElementById('modal-position-details');
-                        if (pos && typeof pos === 'object' && Object.keys(pos).length > 0) {
-                            try {
-                                // Format data with defaults
-                                const size = parseFloat(pos.amount || pos.positionAmt || 0).toFixed(5);
-                                const entryPrice = parseFloat(pos.entry_price || pos.avgPrice || 0).toFixed(8);
-                                const markPrice = parseFloat(pos.mark_price || data.current_price || 0).toFixed(8);
-                                const liqPrice = parseFloat(pos.liquidation_price || pos.liquidationPrice || 0).toFixed(8);
-                                const unrealizedPnL = parseFloat(pos.unrealized_pnl_in_usdt || pos.unrealizedProfit || 0).toFixed(2);
-                                const roi = (parseFloat(pos.percentage_return || pos.ROI || 0) * 100).toFixed(2);
-                                const margin = parseFloat(pos.notional || 0).toFixed(2);
-                                const marginRatio = parseFloat(pos.margin_ratio || pos.marginRatio || 0).toFixed(2);
-                                
-                                const pnlColor = unrealizedPnL >= 0 ? '#00ff88' : '#ff4444';
-                                const roiColor = roi >= 0 ? '#00ff88' : '#ff4444';
-                                
-                                posDetailsDiv.innerHTML = `
-                                    <div style="background: #1a1a2e; padding: 8px; border-radius: 4px; margin-bottom: 8px; font-size: 11px; border-left: 3px solid #ff9800;">
-                                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                                            <div><span style="color: #aaa;">Size:</span> <strong style="color: #fff;">${size}</strong></div>
-                                            <div><span style="color: #aaa;">Entry:</span> <strong style="color: #fff;">$${entryPrice}</strong></div>
-                                            <div><span style="color: #aaa;">Mark:</span> <strong style="color: #fff;">$${markPrice}</strong></div>
-                                            <div><span style="color: #aaa;">Liq:</span> <strong style="color: #fff;">$${liqPrice}</strong></div>
-                                            <div><span style="color: #aaa;">Margin:</span> <strong style="color: #fff;">$${margin}</strong></div>
-                                            <div><span style="color: #aaa;">M.Ratio:</span> <strong style="color: #fff;">${marginRatio}%</strong></div>
-                                        </div>
-                                        <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #333;">
-                                            <div style="display: flex; justify-content: space-between;">
-                                                <span style="color: #aaa;">PnL:</span> <strong style="color: ${pnlColor};">$${unrealizedPnL}</strong>
-                                            </div>
-                                            <div style="display: flex; justify-content: space-between;">
-                                                <span style="color: #aaa;">ROI:</span> <strong style="color: ${roiColor};">${roi >= 0 ? '+' : ''}${roi}%</strong>
-                                            </div>
-                                        </div>
-                                    </div>
-                                `;
-                            } catch (parseErr) {
-                                posDetailsDiv.innerHTML = '<div style="color: #ff6b6b; font-size: 11px;">⚠️ Position data format error</div>';
+        console.log('🔍 showCoinDetails() called');
+        try {
+            // Safely get form values with fallbacks
+            const symbolElem = document.querySelector('select[name="symbol"]');
+            const symbol = symbolElem ? symbolElem.value : 'BTCUSDT';
+            
+            const sl_typeElem = document.querySelector('select[name="sl_type"]');
+            const sl_type = sl_typeElem ? sl_typeElem.value : 'SL % Movement';
+            
+            const sl_valueElem = document.querySelector('input[name="sl_value"]');
+            const sl_value = (sl_valueElem && sl_valueElem.value) ? sl_valueElem.value : '1.5';
+            
+            const sideElem = document.querySelector('select[name="side"]');
+            const side = sideElem ? sideElem.value : 'LONG';
+            
+            console.log('📊 Form values:', {symbol, sl_type, sl_value, side});
+            
+            if (!symbol) {
+                alert('❌ No symbol selected! Please select a coin.');
+                return;
+            }
+            
+            // Show loading state
+            const modal = document.getElementById('coin-details-modal');
+            if (!modal) {
+                console.error('❌ Modal element not found!');
+                alert('❌ Modal element not found! Check browser console.');
+                return;
+            }
+            
+            console.log('✅ Modal found, opening...');
+            document.getElementById('modal-symbol').textContent = '⏳ ' + symbol;
+            document.getElementById('modal-max-lev').textContent = '...';
+            document.getElementById('modal-sugg-lev').textContent = '...';
+            document.getElementById('modal-rec').innerHTML = '⏳ Fetching live data...';
+            document.getElementById('modal-position-details').innerHTML = '<div style="color: #888; font-size: 11px; padding: 8px; text-align: center;">⏳ Loading position data...</div>';
+            
+            // Show modal with display block first, then flex
+            modal.style.display = 'block';
+            setTimeout(() => {
+                modal.style.display = 'flex';
+                console.log('✅ Modal displayed');
+            }, 10);
+            
+            // Fetch with SL parameters for real-time calculation
+            const fetchUrl = `/api/coin-details/${symbol}?sl_type=${encodeURIComponent(sl_type)}&sl_value=${encodeURIComponent(sl_value)}&side=${encodeURIComponent(side)}`;
+            console.log('🔗 Fetching:', fetchUrl);
+            
+            fetch(fetchUrl)
+                .then(r => {
+                    console.log('📡 Response status:', r.status);
+                    return r.json();
+                })
+                .then(data => {
+                    console.log('📦 API Data received:', data);
+                    try {
+                        if (data && data.success) {
+                            const pos = data.position;
+                            
+                            // Update basic info with REAL data
+                            document.getElementById('modal-symbol').textContent = symbol;
+                            document.getElementById('modal-max-lev').textContent = data.max_leverage || '125';
+                            document.getElementById('modal-sugg-lev').textContent = data.suggested_leverage || '45';
+                            
+                            // Show recommendations based on max leverage
+                            let recommendations = '';
+                            const maxLev = data.max_leverage || 125;
+                            if (maxLev <= 20) {
+                                recommendations = '🔴 Low leverage - Use 5-10% SL';
+                            } else if (maxLev <= 50) {
+                                recommendations = '🟡 Medium leverage - Use 2-5% SL';
+                            } else {
+                                recommendations = '🟢 High leverage - Use 1-2% SL';
                             }
+                            if (data.sl_percent) {
+                                recommendations += ` | Current SL: ${data.sl_percent}%`;
+                            }
+                            document.getElementById('modal-rec').innerHTML = recommendations;
+                            
+                            // Show position details if open
+                            const posDetailsDiv = document.getElementById('modal-position-details');
+                            if (pos && typeof pos === 'object' && Object.keys(pos).length > 0) {
+                                try {
+                                    // Format data with defaults
+                                    const size = parseFloat(pos.amount || pos.positionAmt || 0).toFixed(5);
+                                    const entryPrice = parseFloat(pos.entry_price || pos.avgPrice || 0).toFixed(8);
+                                    const markPrice = parseFloat(pos.mark_price || data.current_price || 0).toFixed(8);
+                                    const liqPrice = parseFloat(pos.liquidation_price || pos.liquidationPrice || 0).toFixed(8);
+                                    const unrealizedPnL = parseFloat(pos.unrealized_pnl_in_usdt || pos.unrealizedProfit || 0).toFixed(2);
+                                    const roi = (parseFloat(pos.percentage_return || pos.ROI || 0) * 100).toFixed(2);
+                                    const margin = parseFloat(pos.notional || 0).toFixed(2);
+                                    const marginRatio = parseFloat(pos.margin_ratio || pos.marginRatio || 0).toFixed(2);
+                                    
+                                    const pnlColor = unrealizedPnL >= 0 ? '#00ff88' : '#ff4444';
+                                    const roiColor = roi >= 0 ? '#00ff88' : '#ff4444';
+                                    
+                                    posDetailsDiv.innerHTML = `
+                                        <div style="background: #1a1a2e; padding: 8px; border-radius: 4px; margin-bottom: 8px; font-size: 11px; border-left: 3px solid #ff9800;">
+                                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                                                <div><span style="color: #aaa;">Size:</span> <strong style="color: #fff;">${size}</strong></div>
+                                                <div><span style="color: #aaa;">Entry:</span> <strong style="color: #fff;">$${entryPrice}</strong></div>
+                                                <div><span style="color: #aaa;">Mark:</span> <strong style="color: #fff;">$${markPrice}</strong></div>
+                                                <div><span style="color: #aaa;">Liq:</span> <strong style="color: #fff;">$${liqPrice}</strong></div>
+                                                <div><span style="color: #aaa;">Margin:</span> <strong style="color: #fff;">$${margin}</strong></div>
+                                                <div><span style="color: #aaa;">M.Ratio:</span> <strong style="color: #fff;">${marginRatio}%</strong></div>
+                                            </div>
+                                            <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #333;">
+                                                <div style="display: flex; justify-content: space-between;">
+                                                    <span style="color: #aaa;">PnL:</span> <strong style="color: ${pnlColor};">$${unrealizedPnL}</strong>
+                                                </div>
+                                                <div style="display: flex; justify-content: space-between;">
+                                                    <span style="color: #aaa;">ROI:</span> <strong style="color: ${roiColor};">${roi >= 0 ? '+' : ''}${roi}%</strong>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    `;
+                                } catch (parseErr) {
+                                    console.error('Position parsing error:', parseErr);
+                                    posDetailsDiv.innerHTML = '<div style="color: #ff6b6b; font-size: 11px;">⚠️ Position data format error</div>';
+                                }
+                            } else {
+                                posDetailsDiv.innerHTML = '<div style="color: #888; font-size: 11px; padding: 8px; text-align: center;">✅ No open position for this symbol</div>';
+                            }
+                            posDetailsDiv.style.display = 'block';
+                            console.log('✅ Modal updated successfully');
                         } else {
-                            posDetailsDiv.innerHTML = '<div style="color: #888; font-size: 11px; padding: 8px; text-align: center;">✅ No open position for this symbol</div>';
+                            document.getElementById('modal-rec').innerHTML = '❌ ' + (data.message || 'Error fetching data');
+                            console.error('API error:', data);
                         }
-                        posDetailsDiv.style.display = 'block';
-                        console.log('✅ Coin details fetched:', data);
-                    } else {
-                        document.getElementById('modal-rec').innerHTML = '❌ ' + (data.message || 'Error fetching data');
-                        console.error('API error:', data);
+                    } catch (err) {
+                        console.error('Data processing error:', err);
+                        document.getElementById('modal-rec').innerHTML = '❌ Processing error: ' + err.message;
                     }
-                } catch (err) {
-                    console.error('Data processing error:', err);
-                    document.getElementById('modal-rec').innerHTML = '❌ Processing error: ' + err.message;
-                }
-            })
-            .catch(err => {
-                console.error('Fetch error:', err);
-                document.getElementById('modal-rec').innerHTML = '❌ Network error: ' + err.message;
-            });
+                })
+                .catch(err => {
+                    console.error('Fetch error:', err);
+                    document.getElementById('modal-rec').innerHTML = '❌ Network error: ' + err.message;
+                });
+        } catch (e) {
+            console.error('showCoinDetails error:', e);
+            alert('❌ Error: ' + e.message);
+        }
     }
 
     // ✅ CLOSE COIN DETAILS MODAL
@@ -835,8 +877,9 @@
 </script>
 
 <!-- ✅ COIN DETAILS MODAL POPUP - COMPACT VERSION -->
-<div id="coin-details-modal" style="display:none; position:fixed; z-index:9999; left:0; top:0; width:100%; height:100%; background-color:rgba(0,0,0,0.7); align-items:center; justify-content:center;" onclick="if(event.target.id === 'coin-details-modal') closeCoinModal()">
-    <div style="background-color: #0d1117; padding: 20px; border: 2px solid #00d4ff; border-radius: 8px; width: 85%; max-width: 420px; color: #fff; max-height: 80vh; overflow-y: auto; box-shadow: 0 0 30px rgba(0, 212, 255, 0.3);" onclick="event.stopPropagation();">
+<div id="coin-details-modal" style="display:none; position:fixed; z-index:9999; left:0; top:0; width:100%; height:100%; background-color:rgba(0,0,0,0.7);" onclick="if(event.target.id === 'coin-details-modal') closeCoinModal()">
+    <div style="display:flex; align-items:center; justify-content:center; width:100%; height:100%;">
+        <div style="background-color: #0d1117; padding: 20px; border: 2px solid #00d4ff; border-radius: 8px; width: 85%; max-width: 420px; color: #fff; max-height: 80vh; overflow-y: auto; box-shadow: 0 0 30px rgba(0, 212, 255, 0.3);" onclick="event.stopPropagation();">
         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #00d4ff; padding-bottom: 10px; margin-bottom: 15px;">
             <h3 style="color: #00d4ff; margin: 0; font-size: 16px;">ℹ️ <span id="modal-symbol" style="color: #00ff88;">BTCUSDT</span></h3>
             <span onclick="closeCoinModal()" style="color: #ff6b6b; font-size: 24px; font-weight: bold; cursor: pointer; line-height: 1;">&times;</span>
@@ -868,8 +911,8 @@
         <button onclick="closeCoinModal()" style="width: 100%; padding: 8px; background: #00d4ff; color: #000; font-weight: bold; border: none; border-radius: 4px; cursor: pointer; font-size: 13px;">
             ✓ Close
         </button>
+        </div>
     </div>
 </div>
-
 </body>
 </html>
