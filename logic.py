@@ -762,14 +762,19 @@ def execute_trade_action(balance, symbol, side, entry, order_type, sl_type, sl_v
         if not can_trade:
             return {"success": False, "message": limit_msg}
 
-        # Set leverage/margin with fallback handling
-        leverage_set = False
-        leverage_error = None
+        # ✅ SMART LEVERAGE FALLBACK - Try ALL common leverage values
         original_lev = lev
+        leverage_set = False
         
-        # Try progressively lower leverage if initial fails
-        leverage_attempts = [lev] + [max(1, lev - i*10) for i in range(1, lev//10 + 1)] + [10, 5, 3, 2, 1]
-        leverage_attempts = list(dict.fromkeys(leverage_attempts))  # Remove duplicates
+        # Build comprehensive list: start with requested, then try all common values
+        # Common Binance leverage: 125, 100, 75, 50, 25, 20, 15, 10, 5, 3, 2, 1
+        all_leverages = [125, 100, 75, 50, 25, 20, 15, 10, 5, 3, 2, 1]
+        
+        # Try requested leverage first
+        leverage_attempts = [original_lev] + [x for x in all_leverages if x < original_lev and x != original_lev]
+        leverage_attempts = list(dict.fromkeys(leverage_attempts))  # Remove duplicates, preserve order
+        
+        print(f"📊 Trying leverages for {symbol}: {leverage_attempts}")
         
         for attempt_lev in leverage_attempts:
             try:
@@ -777,34 +782,46 @@ def execute_trade_action(balance, symbol, side, entry, order_type, sl_type, sl_v
                 lev = attempt_lev
                 leverage_set = True
                 if attempt_lev < original_lev:
-                    print(f"⚠️ Leverage {original_lev}x rejected, using {attempt_lev}x instead")
+                    print(f"✅ Leverage adjusted: {original_lev}x → {attempt_lev}x")
                 break
             except BinanceAPIException as e:
-                if e.code == 4028:  # Leverage not valid
-                    leverage_error = e
+                if e.code == 4028:  # Leverage not valid for this coin/account
+                    print(f"   ⚠️ {attempt_lev}x rejected for {symbol}")
                     continue
                 else:
-                    raise  # Re-raise other errors
+                    # Unexpected error
+                    print(f"   ❌ Leverage error {e.code}: {e}")
+                    raise
             except Exception as e:
-                leverage_error = e
+                print(f"   ⚠️ Leverage {attempt_lev}x error: {e}")
                 continue
         
         if not leverage_set:
             return {
                 "success": False, 
-                "message": f"❌ Leverage {original_lev}x is not available for {symbol} on your account. Error: {leverage_error}"
+                "message": f"❌ No valid leverage found for {symbol} on your account.\n"
+                           f"Requested: {original_lev}x\n"
+                           f"Tried: {', '.join(map(str, leverage_attempts))}\n"
+                           f"All rejected. Your account/coin may have restrictions.\n"
+                           f"Try: Contact Binance support or use a different coin."
             }
         
-        # Try to set margin type
+        # Try to set margin type (silently ignore if already set)
         try:
             client.futures_change_margin_type(symbol=symbol, marginType=margin_mode)
         except BinanceAPIException as e:
-            if e.code == 4046:  # Already set to this mode
+            # These are non-fatal - already set or not needed
+            if e.code in [4046, 4048]:  # Already in this mode, or no need to change
+                print(f"ℹ️ Margin mode already set to {margin_mode}")
                 pass
             else:
-                return {"success": False, "message": f"❌ Margin mode error: {str(e)}"}
+                # Only fail for actual margin mode errors
+                print(f"⚠️ Margin mode issue (non-fatal, continuing): {e}")
+                pass
         except Exception as e:
-            return {"success": False, "message": f"❌ Margin mode error: {str(e)}"}
+            # Ignore margin mode errors - they don't block trades
+            print(f"⚠️ Margin mode error (ignored): {str(e)}")
+            pass
 
         e_side = Client.SIDE_BUY if side == "LONG" else Client.SIDE_SELL
         x_side = Client.SIDE_SELL if side == "LONG" else Client.SIDE_BUY
@@ -831,29 +848,44 @@ def execute_trade_action(balance, symbol, side, entry, order_type, sl_type, sl_v
                            f"   Try: Lower quantity, reduce leverage, or increase stop loss %"
             }
 
-        # MAIN ORDER
-        order_params = {"symbol": symbol, "side": e_side, "type": order_type, "quantity": qty}
-        if order_type == "LIMIT":
-            order_params["price"] = round_price(symbol, entry, user_id)
-            order_params["timeInForce"] = "GTC"
-        client.futures_create_order(**order_params)
-        time.sleep(0.5)
+        # MAIN ORDER - This MUST succeed
+        try:
+            order_params = {"symbol": symbol, "side": e_side, "type": order_type, "quantity": qty}
+            if order_type == "LIMIT":
+                order_params["price"] = round_price(symbol, entry, user_id)
+                order_params["timeInForce"] = "GTC"
+            client.futures_create_order(**order_params)
+            time.sleep(0.5)
+        except Exception as e:
+            return {"success": False, "message": f"❌ Main order failed: {str(e)}"}
 
-        # SL ORDER
-        client.futures_create_order(symbol=symbol, side=x_side, type="STOP_MARKET", 
-            stopPrice=sl_p, closePosition=True, workingType="MARK_PRICE")
+        # SL ORDER - Create with error tolerance
+        try:
+            client.futures_create_order(symbol=symbol, side=x_side, type="STOP_MARKET", 
+                stopPrice=sl_p, closePosition=True, workingType="MARK_PRICE")
+        except Exception as e:
+            print(f"⚠️ SL order creation failed: {e}")
+            log_trade_event("TRADE_WARN", f"⚠️ SL order failed but main position created: {str(e)}", user_id)
 
-        # TP1 PARTIAL
-        if tp1 > 0 and ((side=="LONG" and tp1>entry) or (side=="SHORT" and tp1<entry)):
-            t1_qty = round_qty(symbol, qty * (tp1_pct/100), user_id)
-            if t1_qty > 0:
+        # TP1 PARTIAL - Create with error tolerance  
+        try:
+            if tp1 > 0 and ((side=="LONG" and tp1>entry) or (side=="SHORT" and tp1<entry)):
+                t1_qty = round_qty(symbol, qty * (tp1_pct/100), user_id)
+                if t1_qty > 0:
+                    client.futures_create_order(symbol=symbol, side=x_side, type="TAKE_PROFIT_MARKET",
+                        stopPrice=round_price(symbol, tp1, user_id), quantity=t1_qty, reduceOnly=True, workingType="MARK_PRICE")
+        except Exception as e:
+            print(f"⚠️ TP1 order creation failed: {e}")
+            log_trade_event("TRADE_WARN", f"⚠️ TP1 order failed: {str(e)}", user_id)
+
+        # TP2 REMAINDER - Create with error tolerance
+        try:
+            if tp2 > 0 and ((side=="LONG" and tp2>entry) or (side=="SHORT" and tp2<entry)):
                 client.futures_create_order(symbol=symbol, side=x_side, type="TAKE_PROFIT_MARKET",
-                    stopPrice=round_price(symbol, tp1, user_id), quantity=t1_qty, reduceOnly=True, workingType="MARK_PRICE")
-
-        # TP2 REMAINDER
-        if tp2 > 0 and ((side=="LONG" and tp2>entry) or (side=="SHORT" and tp2<entry)):
-            client.futures_create_order(symbol=symbol, side=x_side, type="TAKE_PROFIT_MARKET",
-                stopPrice=round_price(symbol, tp2, user_id), closePosition=True, workingType="MARK_PRICE")
+                    stopPrice=round_price(symbol, tp2, user_id), closePosition=True, workingType="MARK_PRICE")
+        except Exception as e:
+            print(f"⚠️ TP2 order creation failed: {e}")
+            log_trade_event("TRADE_WARN", f"⚠️ TP2 order failed: {str(e)}", user_id)
 
         # CREATE DB POSITION RECORD
         pos = TradePosition(

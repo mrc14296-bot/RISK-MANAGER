@@ -89,13 +89,16 @@
             </div>
 
             <div class="row">
-                <div class="col">
+                <div class="col" style="flex: 1;">
                     <label>Symbol</label>
-                    <select name="symbol" onchange="this.form.submit()">
+                    <select name="symbol" onchange="changeSymbol(this.value)" id="symbol_select">
         {% for sym in symbols %}
         <option value="{{sym}}" {{ 'selected' if sym == selected_symbol }}>{{sym}}</option>
         {% endfor %}
     </select>
+                </div>
+                <div style="display: flex; align-items: flex-end; margin-left: 10px;">
+                    <button type="button" class="place" id="coin-info-btn" style="padding: 6px 12px; font-size: 12px; background: #17a2b8;" onclick="showCoinDetails()">ℹ️ Coin Details</button>
                 </div>
             </div>
 
@@ -119,8 +122,8 @@
                     </select>
                 </div>
                 <div class="col">
-                    <label>Margin Mode</label>
-                    <select name="margin_mode">
+                    <label>Margin Mode (Manual - No Auto Change)</label>
+                    <select name="margin_mode" id="margin_mode_select">
                         <option value="ISOLATED" {{ 'selected' if margin_mode == 'ISOLATED' }}>ISOLATED</option>
                         <option value="CROSS" {{ 'selected' if margin_mode == 'CROSS' }}>CROSS</option>
                     </select>
@@ -376,15 +379,25 @@
                                       event.type === 'TRADE_CLOSE' ? '#ff4444' : 
                                       event.type === 'SL_UPDATE' ? '#ffaa00' : '#ffffff';
                     const pnlColor = event.pnl >= 0 ? '#00ff88' : '#ff4444';
-                    html += `<div style="padding: 4px 0; border-bottom: 1px solid #333; font-size: 10px; color: ${eventColor};">
-                        <strong>${event.timestamp}</strong> | ${event.message}
-                        ${event.pnl !== undefined ? `<span style="color: ${pnlColor}; font-weight: bold;"> PnL: ${event.pnl.toFixed(2)}$</span>` : ''}
+                    
+                    // ✅ Show PNL in live log with real-time updates
+                    let pnlDisplay = '';
+                    if (event.pnl !== undefined) {
+                        pnlDisplay = `<span style="color: ${pnlColor}; font-weight: bold; margin-left: 10px;"> 💰 PnL: $${event.pnl.toFixed(2)} ${event.pnl >= 0 ? '✓' : '✗'}</span>`;
+                    }
+                    
+                    html += `<div style="padding: 6px 0; border-bottom: 1px solid #333; font-size: 10px; color: ${eventColor}; display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <strong style="color: #00d4ff;">${event.timestamp}</strong> | ${event.message}
+                        </div>
+                        ${pnlDisplay}
                     </div>`;
                 });
                 container.innerHTML = html;
                 container.scrollTop = 0;
             }
-        });
+        })
+        .catch(err => console.log('Live log update error:', err));
     }
 
     function clearTradeLog() {
@@ -682,6 +695,161 @@
         // Initial validation
         setTimeout(validateFormInputs, 500);
     });
+
+    // ✅ PRESERVE FORM STATE when changing coins
+    function changeSymbol(symbol) {
+        const form = document.querySelector('form');
+        const formData = new FormData(form);
+        
+        // Submit form to load new coin data but preserve all other fields
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'symbol';
+        input.value = symbol;
+        
+        form.appendChild(input);
+        form.submit();
+    }
+
+    // ✅ SHOW COIN DETAILS IN MODAL (WITH LIVE DATA)
+    function showCoinDetails() {
+        const symbol = document.querySelector('select[name="symbol"]').value;
+        
+        fetch(`/api/coin-details/${symbol}`)
+            .then(r => r.json())
+            .then(data => {
+                try {
+                    if (data && data.success) {
+                        const modal = document.getElementById('coin-details-modal');
+                        const pos = data.position;
+                        
+                        // Update basic info
+                        document.getElementById('modal-symbol').textContent = symbol;
+                        document.getElementById('modal-max-lev').textContent = data.max_leverage || '125';
+                        document.getElementById('modal-sugg-lev').textContent = data.suggested_leverage || '45';
+                        
+                        // Show recommendations
+                        let recommendations = '';
+                        const maxLev = data.max_leverage || 125;
+                        if (maxLev <= 20) {
+                            recommendations = '🔴 Low leverage - Use 5-10% SL';
+                        } else if (maxLev <= 50) {
+                            recommendations = '🟡 Medium leverage - Use 2-5% SL';
+                        } else {
+                            recommendations = '🟢 High leverage - Use 1-2% SL';
+                        }
+                        document.getElementById('modal-rec').innerHTML = recommendations;
+                        
+                        // Show position details if open
+                        const posDetailsDiv = document.getElementById('modal-position-details');
+                        if (pos && typeof pos === 'object') {
+                            try {
+                                // Format data with defaults
+                                const size = parseFloat(pos.amount || pos.positionAmt || 0).toFixed(5);
+                                const entryPrice = parseFloat(pos.entry_price || pos.avgPrice || 0).toFixed(8);
+                                const markPrice = parseFloat(pos.mark_price || data.current_price || 0).toFixed(8);
+                                const liqPrice = parseFloat(pos.liquidation_price || pos.liquidationPrice || 0).toFixed(8);
+                                const unrealizedPnL = parseFloat(pos.unrealized_pnl_in_usdt || pos.unrealizedProfit || 0).toFixed(2);
+                                const roi = (parseFloat(pos.percentage_return || pos.ROI || 0) * 100).toFixed(2);
+                                const margin = parseFloat(pos.notional || 0).toFixed(2);
+                                const marginRatio = parseFloat(pos.margin_ratio || pos.marginRatio || 0).toFixed(2);
+                                
+                                const pnlColor = unrealizedPnL >= 0 ? '#00ff88' : '#ff4444';
+                                const roiColor = roi >= 0 ? '#00ff88' : '#ff4444';
+                                
+                                posDetailsDiv.innerHTML = `
+                                    <div style="background: #1a1a2e; padding: 8px; border-radius: 4px; margin-bottom: 8px; font-size: 11px;">
+                                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                                            <div><span style="color: #aaa;">Size:</span> <strong style="color: #fff;">${size}</strong></div>
+                                            <div><span style="color: #aaa;">Entry:</span> <strong style="color: #fff;">$${entryPrice}</strong></div>
+                                            <div><span style="color: #aaa;">Mark:</span> <strong style="color: #fff;">$${markPrice}</strong></div>
+                                            <div><span style="color: #aaa;">Liq:</span> <strong style="color: #fff;">$${liqPrice}</strong></div>
+                                            <div><span style="color: #aaa;">Margin:</span> <strong style="color: #fff;">$${margin}</strong></div>
+                                            <div><span style="color: #aaa;">M.Ratio:</span> <strong style="color: #fff;">${marginRatio}%</strong></div>
+                                        </div>
+                                        <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #333;">
+                                            <div style="display: flex; justify-content: space-between;">
+                                                <span style="color: #aaa;">PnL:</span> <strong style="color: ${pnlColor};">$${unrealizedPnL}</strong>
+                                            </div>
+                                            <div style="display: flex; justify-content: space-between;">
+                                                <span style="color: #aaa;">ROI:</span> <strong style="color: ${roiColor};">${roi >= 0 ? '+' : ''}${roi}%</strong>
+                                            </div>
+                                        </div>
+                                    </div>
+                                `;
+                            } catch (parseErr) {
+                                posDetailsDiv.innerHTML = '<div style="color: #aaa; font-size: 11px;">Position data format error</div>';
+                            }
+                        } else {
+                            posDetailsDiv.innerHTML = '<div style="color: #888; font-size: 11px; padding: 8px; text-align: center;">No open position</div>';
+                        }
+                        posDetailsDiv.style.display = 'block';
+                        
+                        modal.style.display = 'flex';
+                    } else {
+                        alert('Error: ' + (data.message || 'Unknown error'));
+                    }
+                } catch (err) {
+                    console.error('Data processing error:', err);
+                    alert('Error processing coin details: ' + err.message);
+                }
+            })
+            .catch(err => {
+                console.error('Fetch error:', err);
+                alert('Failed to fetch coin details: ' + err.message);
+            });
+    }
+
+    // ✅ CLOSE COIN DETAILS MODAL
+    function closeCoinModal() {
+        document.getElementById('coin-details-modal').style.display = 'none';
+    }
+
+    // Close modal when clicking outside
+    window.onclick = function(event) {
+        const modal = document.getElementById('coin-details-modal');
+        if (event.target === modal && modal.style.display === 'flex') {
+            modal.style.display = 'none';
+        }
+    }
 </script>
+
+<!-- ✅ COIN DETAILS MODAL POPUP - COMPACT VERSION -->
+<div id="coin-details-modal" style="display:none; position:fixed; z-index:9999; left:0; top:0; width:100%; height:100%; background-color:rgba(0,0,0,0.7); align-items:center; justify-content:center;" onclick="if(event.target.id === 'coin-details-modal') closeCoinModal()">
+    <div style="background-color: #0d1117; padding: 20px; border: 2px solid #00d4ff; border-radius: 8px; width: 85%; max-width: 420px; color: #fff; max-height: 80vh; overflow-y: auto; box-shadow: 0 0 30px rgba(0, 212, 255, 0.3);" onclick="event.stopPropagation();">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #00d4ff; padding-bottom: 10px; margin-bottom: 15px;">
+            <h3 style="color: #00d4ff; margin: 0; font-size: 16px;">ℹ️ <span id="modal-symbol" style="color: #00ff88;">BTCUSDT</span></h3>
+            <span onclick="closeCoinModal()" style="color: #ff6b6b; font-size: 24px; font-weight: bold; cursor: pointer; line-height: 1;">&times;</span>
+        </div>
+        
+        <!-- MAX LEVERAGE INFO -->
+        <div style="background: #1a1a2e; padding: 10px; border-radius: 6px; margin-bottom: 10px; border-left: 3px solid #00ff88;">
+            <p style="margin: 0; font-size: 11px; color: #aaa;">Max Leverage</p>
+            <p style="margin: 4px 0; font-size: 22px; color: #00ff88; font-weight: bold;"><span id="modal-max-lev">125</span>x</p>
+        </div>
+        
+        <!-- SUGGESTED LEVERAGE -->
+        <div style="background: #1a1a2e; padding: 10px; border-radius: 6px; margin-bottom: 10px; border-left: 3px solid #ffaa00;">
+            <p style="margin: 0; font-size: 11px; color: #aaa;">Suggested Safe Lev</p>
+            <p style="margin: 4px 0; font-size: 20px; color: #ffaa00; font-weight: bold;"><span id="modal-sugg-lev">45</span>x</p>
+        </div>
+        
+        <!-- POSITION DETAILS (DYNAMIC) -->
+        <div id="modal-position-details" style="background: #1a1a2e; padding: 10px; border-radius: 6px; margin-bottom: 10px; border-left: 3px solid #17a2b8; display: none;">
+            <!-- Filled dynamically by JS -->
+        </div>
+        
+        <!-- RECOMMENDATION -->
+        <div style="background: #0d2a3a; padding: 10px; border-radius: 6px; border-left: 3px solid #00d4ff; margin-bottom: 10px;">
+            <p style="margin: 0; font-size: 11px; color: #aaa;">📌 Tip:</p>
+            <p style="margin: 4px 0; font-size: 12px; color: #fff;" id="modal-rec">Loading...</p>
+        </div>
+        
+        <button onclick="closeCoinModal()" style="width: 100%; padding: 8px; background: #00d4ff; color: #000; font-weight: bold; border: none; border-radius: 4px; cursor: pointer; font-size: 13px;">
+            ✓ Close
+        </button>
+    </div>
+</div>
+
 </body>
 </html>

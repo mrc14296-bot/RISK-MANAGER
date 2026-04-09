@@ -773,6 +773,62 @@ def today_stats_api():
     stats = logic.get_today_stats(current_user.id)
     return jsonify(stats)
 
+@app.route("/api/coin-details/<symbol>")
+@login_required
+@subscription_required
+def coin_details_api(symbol):
+    """Get complete coin details including live position data"""
+    try:
+        # Get max leverage
+        max_lev = logic.get_max_leverage(symbol, current_user.id)
+        suggested_lev = min(int(100.0 / (2.0 + 0.2)), max_lev, 125)
+        
+        # Get live position data
+        position = None
+        try:
+            positions_data = logic.get_open_positions(current_user.id)
+            
+            # Handle different response formats
+            if isinstance(positions_data, dict) and positions_data.get("success"):
+                positions = positions_data.get("positions", [])
+                # Find position for this symbol
+                if isinstance(positions, list):
+                    for pos in positions:
+                        if isinstance(pos, dict) and pos.get("symbol") == symbol:
+                            position = pos
+                            break
+            elif isinstance(positions_data, list):
+                # If it's directly a list of positions
+                for pos in positions_data:
+                    if isinstance(pos, dict) and pos.get("symbol") == symbol:
+                        position = pos
+                        break
+        except Exception as pos_err:
+            print(f"Position fetch warning (non-blocking): {pos_err}")
+            position = None
+        
+        # Get current price
+        current_price = logic.get_live_price(symbol, current_user.id)
+        
+        response_data = {
+            "success": True,
+            "symbol": symbol,
+            "max_leverage": max_lev,
+            "suggested_leverage": suggested_lev,
+            "current_price": float(current_price) if current_price else 0,
+            "position": position
+        }
+        
+        return jsonify(response_data)
+    except Exception as e:
+        print(f"Error fetching coin details: {e}")
+        return jsonify({
+            "success": False,
+            "symbol": symbol,
+            "message": f"Error: {str(e)}"
+        }), 500
+
+
 @app.route("/update_sl", methods=["POST"])  # Legacy
 @login_required
 @subscription_required
