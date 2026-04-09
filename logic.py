@@ -19,6 +19,8 @@ _positions_cache = {}
 _positions_cache_time = {}
 _trade_history_cache = {}
 _trade_history_cache_time = {}
+_leverage_cache = {}
+_leverage_cache_time = {}
 _last_call_time = 0
 CACHE_DURATION = 5
 
