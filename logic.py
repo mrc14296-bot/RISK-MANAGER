@@ -515,106 +515,61 @@ def round_price(symbol, price, user_id=None):
     return round(price, 2)
 
 # NEW: Fetch maximum leverage allowed by Binance for a specific symbol
-_leverage_cache = {}
-_leverage_cache_time = {}
-
 def get_max_leverage(symbol, user_id=None):
     """
     Fetch the maximum leverage allowed by Binance for a specific symbol.
-    Five-tier fallback system:
-    1. Cache (if fresh)
-    2. Known leverage map
-    3. Authenticated client (YOUR CONNECTED ACCOUNT - HIGH PRIORITY)
-    4. Direct HTTP call to Binance exchangeInfo (public API)
-    5. Default to 125x
+    Logic: Cache -> Binance API (Live) -> Known Map -> Safe Default (20x)
     """
     global _leverage_cache, _leverage_cache_time
     now = time.time()
     cache_key = f"{symbol}_{user_id or 'public'}"
     
-    # TIER 1: Check cache first
+    # TIER 1: Check cache (Valid for 5 minutes)
     if cache_key in _leverage_cache and (now - _leverage_cache_time.get(cache_key, 0)) < 300:
-        cached = _leverage_cache[cache_key]
-        print(f"📦 {symbol} leverage from cache: {cached}x")
-        return cached
+        return _leverage_cache[cache_key]
     
+    # Wrap entire logic in a try block to catch any unexpected errors
     try:
-        # TIER 2: Check known map first (instant)
+        # TIER 2: Live Binance API (The most accurate way)
+        client = get_client(user_id)
+        if client:
+            try:
+                # This is the specific Binance endpoint for leverage limits
+                brackets = client.futures_leverage_bracket(symbol=symbol)
+                if brackets and isinstance(brackets, list):
+                    # The first bracket [0] contains the max leverage for Tier 1
+                    max_lev = int(brackets[0]['brackets'][0]['initialLeverage'])
+                    
+                    _leverage_cache[cache_key] = max_lev
+                    _leverage_cache_time[cache_key] = now
+                    print(f"✅ {symbol} Live Max: {max_lev}x")
+                    return max_lev
+            except Exception as api_err:
+                print(f"⚠️ Binance API bracket call failed for {symbol}: {api_err}")
+
+        # TIER 3: Known Map Fallback (If API is down or No Keys connected)
         if symbol in KNOWN_LEVERAGE_MAP:
             max_lev = KNOWN_LEVERAGE_MAP[symbol]
-            print(f"✅ {symbol} from known map: {max_lev}x")
-            _leverage_cache[cache_key] = max_lev
-            _leverage_cache_time[cache_key] = now
+            print(f"📋 {symbol} using Known Map: {max_lev}x")
             return max_lev
-        
-        # TIER 3: Try authenticated client FIRST (YOUR CONNECTED BINANCE ACCOUNT)
-        try:
-            client = get_client(user_id)
-            if client:
-                info = client.futures_exchange_info()
-                for s in info.get('symbols', []):
-                    if s.get('symbol') == symbol:
-                        max_lev = int(float(s.get('maxLeverage', 125)))
-                        if 0 < max_lev <= 999:
-                            _leverage_cache[cache_key] = max_lev
-                            _leverage_cache_time[cache_key] = now
-                            print(f"✅ {symbol} from YOUR Binance account: {max_lev}x")
-                            return max_lev
-        except Exception as auth_err:
-            print(f"⚠️ Account not connected or error: {type(auth_err).__name__}")
-        
-        # TIER 4: Direct HTTP call to Binance API (public API fallback)
-        print(f"🔍 Fetching {symbol} from Binance public API...")
-        try:
-            # Use shorter timeout (2 seconds) to fail fast
-            resp = requests.get(
-                'https://fapi.binance.com/fapi/v1/exchangeInfo',
-                timeout=2,  # 2 second timeout
-                headers={'User-Agent': 'Mozilla/5.0'}
-            )
-            resp.raise_for_status()
-            info = resp.json()
-            
-            for s in info.get('symbols', []):
-                if s.get('symbol') == symbol:
-                    max_lev = int(float(s.get('maxLeverage', 125)))
-                    if max_lev > 0 and max_lev <= 999:  # Sanity check
-                        _leverage_cache[cache_key] = max_lev
-                        _leverage_cache_time[cache_key] = now
-                        print(f"✅ {symbol} from public API: {max_lev}x")
-                        return max_lev
-        except requests.Timeout:
-            print(f"⚠️ API timeout (slow network), using known map or default")
-        except Exception as rest_err:
-            print(f"⚠️ REST API error: {type(rest_err).__name__}")
-        
-        # TIER 5: Smart default fallback
-        # Most altcoins have 75x, majors have 125x
+
+        # TIER 4: Smart default fallback for common patterns
         if symbol.endswith('USDT'):
-            # Check if it looks like a major coin (known large market cap coins usually have 125x)
-            major_coins = ['BTC', 'ETH', 'BNB']
+            major_coins = ['BTC', 'ETH', 'BNB', 'SOL']
             for major in major_coins:
                 if symbol.startswith(major):
-                    print(f"⚠️ {symbol} assumed 125x (major coin)")
-                    _leverage_cache[cache_key] = 125
-                    _leverage_cache_time[cache_key] = now
-                    return 125
+                    print(f"⚠️ {symbol} assumed 75x-125x (major coin default)")
+                    return 75 # Safer than 125
             
-            # Default to 75x for unknown altcoins
-            print(f"⚠️ {symbol} assumed 75x (altcoin default)")
-            _leverage_cache[cache_key] = 75
-            _leverage_cache_time[cache_key] = now
-            return 75
-        
-        # Final fallback to 125x
-        print(f"⚠️ {symbol} using default 125x")
-        _leverage_cache[cache_key] = 125
-        _leverage_cache_time[cache_key] = now
-        return 125
-        
+        # TIER 5: Absolute Safe Default
+        # Almost every coin on Binance allows at least 20x.
+        # Defaulting to 125x is what causes the "leverage too high" errors.
+        print(f"❓ {symbol} unknown, using safe default 20x")
+        return 20
+
     except Exception as e:
-        print(f"❌ Error in get_max_leverage: {str(e)}")
-        return 125
+        print(f"❌ Critical error in get_max_leverage: {str(e)}")
+        return 20 # Safe fallback to prevent trade crashes
 
 def calculate_position_sizing(unutilized_margin, entry, sl_type, sl_value, side="LONG", user_id=None, symbol=None):
     import config
@@ -789,7 +744,29 @@ def get_today_stats(user_id):
         "symbol_trades": symbols,
         "max_per_symbol": config.MAX_TRADES_PER_SYMBOL_PER_DAY
     }
-
+def get_exchange_max_leverage(symbol, client=None):
+    """
+    Fetches the actual maximum available leverage for a symbol from Binance Futures.
+    """
+    try:
+        if not client:
+            # Fallback to your default client logic if a user client isn't passed
+            client = _default_client 
+            
+        # Fetch leverage brackets for the specific symbol
+        brackets_info = client.futures_leverage_bracket(symbol=symbol)
+        
+        # Binance returns a list. Bracket 1 (the first item) always contains the highest leverage
+        if brackets_info and isinstance(brackets_info, list) and len(brackets_info) > 0:
+            max_lev = brackets_info[0]['brackets'][0]['initialLeverage']
+            return int(max_lev)
+            
+    except Exception as e:
+        print(f"API failed to fetch max leverage for {symbol}: {e}")
+        
+    # FALLBACK: If API fails, default to your KNOWN_LEVERAGE_MAP
+    # IMPORTANT: Change the default from a dangerous 125 to a safe 20!
+    return KNOWN_LEVERAGE_MAP.get(symbol, 20)
 
 def execute_trade_action(balance, symbol, side, entry, order_type, sl_type, sl_value, sizing, user_units, user_lev, margin_mode, tp1, tp1_pct, tp2, user_id=None):
     from models import TradePosition, db

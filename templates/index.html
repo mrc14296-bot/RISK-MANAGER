@@ -190,7 +190,7 @@
                 <div class="col">
                     <label>Lev Override</label>
                     <input type="number" name="user_lev" step="any">
-                    <small>Sug: {{sizing.suggested_leverage}}x | Max: {{sizing.exchange_max_leverage | default(125)}}x 
+                    <small>Sug: {{sizing.suggested_leverage}}x | Max: {{sizing.exchange_max_leverage | default('-')}}x
                         <button type="button" onclick="showCoinDetails()" 
                                 style="background: none; border: none; color: #00d4ff; cursor: pointer; font-size: 12px;">ℹ️</button>
                     </small>
@@ -888,7 +888,7 @@
         <!-- MAX LEVERAGE INFO -->
         <div style="background: #1a1a2e; padding: 10px; border-radius: 6px; margin-bottom: 10px; border-left: 3px solid #00ff88;">
             <p style="margin: 0; font-size: 11px; color: #aaa;">Max Leverage</p>
-            <p style="margin: 4px 0; font-size: 22px; color: #00ff88; font-weight: bold;"><span id="modal-max-lev">125</span>x</p>
+           <p style="margin: 4px 0; font-size: 22px; color: #00ff88; font-weight: bold;"><span id="modal-max-lev">-</span>x</p>
         </div>
         
         <!-- SUGGESTED LEVERAGE -->
