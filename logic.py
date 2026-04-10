@@ -665,11 +665,6 @@ def get_open_positions(user_id=None):
 
                 dashboard_margin_ratio = abs(margin_ratio) * leverage
                 
-                if mark_price > 0 and liquidation_price > 0:
-                    margin_ratio = ((mark_price - liquidation_price) / mark_price) * 100 if position_amt > 0 else ((liquidation_price - mark_price) / mark_price) * 100
-                else: 
-                    margin_ratio = 0
-                
                 open_orders = get_open_orders_for_symbol(pos.get('symbol'), user_id)
                 
                 open_positions.append({

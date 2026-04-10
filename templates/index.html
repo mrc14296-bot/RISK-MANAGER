@@ -807,10 +807,10 @@
                                     const entryPrice = parseFloat(pos.entry_price || pos.avgPrice || 0).toFixed(8);
                                     const markPrice = parseFloat(pos.mark_price || data.current_price || 0).toFixed(8);
                                     const liqPrice = parseFloat(pos.liquidation_price || pos.liquidationPrice || 0).toFixed(8);
-                                    const unrealizedPnL = parseFloat(pos.unrealized_pnl_in_usdt || pos.unrealizedProfit || 0).toFixed(2);
-                                    const roi = (parseFloat(pos.percentage_return || pos.ROI || 0) * 100).toFixed(2);
-                                    const margin = parseFloat(pos.notional || 0).toFixed(2);
-                                    const marginRatio = parseFloat(pos.margin_ratio || pos.marginRatio || 0).toFixed(2);
+                                    const unrealizedPnL = parseFloat(pos.unrealized_pnl || pos.unrealizedProfit || 0).toFixed(2);
+                                    const roi = parseFloat(pos.dashboard_roi_percent || pos.roi_percent || 0).toFixed(2);
+                                    const margin = parseFloat(pos.margin_usdt || pos.notional || 0).toFixed(2);
+                                    const marginRatio = parseFloat(pos.dashboard_margin_ratio || pos.margin_ratio || 0).toFixed(2);
                                     
                                     const pnlColor = unrealizedPnL >= 0 ? '#00ff88' : '#ff4444';
                                     const roiColor = roi >= 0 ? '#00ff88' : '#ff4444';
