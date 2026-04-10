@@ -330,8 +330,9 @@
                                 <small>${pos.leverage}x | Entry: $${pos.entry_price.toFixed(4)}</small>
                             </div>
                             <div>PnL: <span style="color: ${pnlColor};">$${pos.unrealized_pnl.toFixed(2)}</span></div>
-                            <div>ROI: <span style="color: ${pnlColor};">${(pos.roi_percent).toFixed(1)}%</span></div>
+                            <div>ROI: <span style="color: ${pnlColor};">${(pos.dashboard_roi_percent ?? pos.roi_percent).toFixed(1)}%</span></div>
                             <div>Margin: $${pos.margin_usdt.toFixed(2)} | Size: $${pos.size_usdt.toFixed(2)}</div>
+                            <div>Margin Ratio: <span style="color: #ffaa00;">${(pos.dashboard_margin_ratio ?? pos.margin_ratio).toFixed(2)}%</span></div>
                             ${pos.open_orders && pos.open_orders.length > 0 ? `<div style="margin-top:8px; font-size: 11px; color:#aaa;"><strong>Open orders:</strong> ${pos.open_orders.map(o => `${o.type} ${o.side} @${o.price}`).join(' • ')}</div>` : ''}
                             <div style="margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap;">
                                 <button onclick="closePosition('${pos.symbol}')" style="background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">Close</button>
