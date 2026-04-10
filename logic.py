@@ -601,7 +601,7 @@ def calculate_position_sizing(unutilized_margin, entry, sl_type, sl_value, side=
     # FINAL: Cap by risk-calc, exchange limit, and absolute max
     final_max_leverage = min(int(calculated_leverage), exchange_max_lev, 125)
     
-    pos_value_usdt = (risk_amount / ((sl_percent / 100.0) + 0.002)) * 100.0
+    pos_value_usdt = risk_amount / ((sl_percent / 100.0) + 0.002)
     position_size = pos_value_usdt / entry
 
     return {
