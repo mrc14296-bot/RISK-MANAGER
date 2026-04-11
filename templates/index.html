@@ -267,9 +267,6 @@
           });
         </script>
 
-        <!-- ✅ INCLUDE ENHANCED POSITION DISPLAY SCRIPT -->
-        <script src="../templates/position_display.js"></script>
-
         <!-- DYNAMIC POSITION COUNTER -->
         <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
             <div class="header" style="margin: 0; flex: 1;" id="position_header">POSITIONS (0) | Open Orders (0)</div>
@@ -313,9 +310,51 @@
 </div>
 
 <script>
-    // ✅ POSITION DISPLAY NOW LOADED FROM position_display.js
-    // This includes: updateLivePositions, leverage/margin/tpsl modals
-    
+    // Live Updates
+    function updateLivePositions() {
+        fetch('/get_open_positions')
+        .then(r => r.json())
+        .then(data => {
+            const container = document.getElementById('live_positions');
+            const header = document.getElementById('position_header');
+            if (data.positions && data.positions.length > 0) {
+                let totalOrders = 0;
+                let html = '';
+                data.positions.forEach(pos => {
+                    const pnlColor = pos.unrealized_pnl >= 0 ? '#00ff88' : '#ff4d4d';
+                    const roiPercent = (pos.dashboard_roi_percent ?? pos.roi_percent).toFixed(1);
+                    const marginRatio = (pos.dashboard_margin_ratio ?? pos.margin_ratio).toFixed(2);
+                    totalOrders += pos.open_orders ? pos.open_orders.length : 0;
+                    html += `
+                        <div style="border: 1px solid #333; padding: 12px; margin-bottom: 8px; border-radius: 6px; background: #111;">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                <span style="font-weight: bold; color: ${pos.side === 'LONG' ? '#00ff88' : '#ff4444'}">${pos.symbol}</span>
+                                <small>${pos.leverage}x | Entry: $${pos.entry_price.toFixed(4)}</small>
+                            </div>
+                            <div>PnL: <span style="color: ${pnlColor};">$${pos.unrealized_pnl.toFixed(2)}</span></div>
+                            <div>ROI: <span style="color: ${pnlColor};">${roiPercent}%</span></div>
+                            <div>Margin: $${pos.margin_usdt.toFixed(2)} | Size: $${pos.size_usdt.toFixed(2)}</div>
+                            <div>Margin Ratio: <span style="color: #ffaa00;">${marginRatio}%</span></div>
+                            ${pos.open_orders && pos.open_orders.length > 0 ? `<div style="margin-top:8px; font-size: 11px; color:#aaa;"><strong>Open orders:</strong> ${pos.open_orders.map(o => `${o.type} ${o.side} @${o.price}`).join(' • ')}</div>` : ''}
+                            <div style="margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap;">
+                                <button onclick="closePosition('${pos.symbol}')" style="background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">Close</button>
+                                <button onclick="partialClose('${pos.symbol}')" style="background: #0d6efd; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">Close %</button>
+                                <button onclick="moveTrailingSL('${pos.symbol}')" style="background: #4d1a1a; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">Trail SL</button>
+                            </div>
+                        </div>
+                    `;
+                });
+                header.textContent = `POSITIONS (${data.positions.length}) | Open Orders (${totalOrders})`;
+                container.innerHTML = html;
+            } else {
+                header.textContent = 'POSITIONS (0)';
+                container.innerHTML = '<div style="text-align: center; color: #888; padding-top: 60px;">No open positions<br><small>Connect Binance account</small></div>';
+            }
+        }).catch(() => {
+            document.getElementById('live_positions').innerHTML = '<div style="text-align: center; color: #ff4444; padding: 60px;">Connection Error</div>';
+        });
+    }
+
     function updateTradeHistory() {
         fetch('/get_trade_history')
         .then(r => r.json())
@@ -849,13 +888,17 @@
                                         </div>
                                     `;
                                     
-                                    posDetailsDiv.innerHTML = breakdownHTML;
+                            posDetailsDiv.innerHTML = breakdownHTML;
+                            // Show action buttons when position exists
+                            document.getElementById('modal-action-buttons').style.display = 'grid';
                                 } catch (parseErr) {
                                     console.error('Position parsing error:', parseErr);
                                     posDetailsDiv.innerHTML = '<div style="color: #ff6b6b; font-size: 11px;">⚠️ Position data format error</div>';
                                 }
                             } else {
                                 posDetailsDiv.innerHTML = '<div style="color: #888; font-size: 11px; padding: 8px; text-align: center;">✅ No open position for this symbol</div>';
+                                // Hide action buttons when no position
+                                document.getElementById('modal-action-buttons').style.display = 'none';
                             }
                             posDetailsDiv.style.display = 'block';
                             console.log('✅ Modal updated successfully');
@@ -875,6 +918,43 @@
         } catch (e) {
             console.error('showCoinDetails error:', e);
             alert('❌ Error: ' + e.message);
+        }
+    }
+
+    // ✅ EDIT LEVERAGE FROM MODAL
+    function editLeverageMod() {
+        const symbol = document.getElementById('modal-symbol').textContent;
+        const newLeverage = prompt(`Enter new leverage for ${symbol} (1-125x):`);
+        if (newLeverage && !isNaN(newLeverage)) {
+            const lev = parseInt(newLeverage);
+            if (lev >= 1 && lev <= 125) {
+                alert(`✅ Would change ${symbol} leverage to ${lev}x. (Integration needed)`);
+                // TODO: Add API call to change leverage
+            } else {
+                alert('❌ Leverage must be between 1-125x');
+            }
+        }
+    }
+
+    // ✅ EDIT TP/SL FROM MODAL
+    function editTPSLMod() {
+        const symbol = document.getElementById('modal-symbol').textContent;
+        const tpPrice = prompt(`Enter Take Profit price for ${symbol}:`);
+        if (tpPrice && !isNaN(tpPrice)) {
+            const slPrice = prompt(`Enter Stop Loss price for ${symbol}:`);
+            if (slPrice && !isNaN(slPrice)) {
+                alert(`✅ Would set TP: $${tpPrice}, SL: $${slPrice} for ${symbol}. (Integration needed)`);
+                // TODO: Add API call to set TP/SL
+            }
+        }
+    }
+
+    // ✅ CLOSE POSITION FROM MODAL
+    function closePosModal() {
+        const symbol = document.getElementById('modal-symbol').textContent;
+        if (confirm(`⚠️ Close entire ${symbol} position?`)) {
+            alert(`✅ Would close ${symbol} position. (Integration needed)`);
+            // TODO: Add API call to close position
         }
     }
 
@@ -919,6 +999,13 @@
         <!-- POSITION DETAILS (DYNAMIC) -->
         <div id="modal-position-details" style="margin-bottom: 10px; display: none;">
             <!-- Filled dynamically by JS -->
+        </div>
+        
+        <!-- ACTION BUTTONS (visible only with open position) -->
+        <div id="modal-action-buttons" style="display: none; gap: 8px; margin-bottom: 10px; display: grid; grid-template-columns: 1fr 1fr 1fr;">
+            <button onclick="editLeverageMod()" style="padding: 8px; background: #ffaa00; color: #000; font-weight: bold; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; transition: 0.2s; white-space: nowrap;"><i icon="⚙️"></i> Leverage</button>
+            <button onclick="editTPSLMod()" style="padding: 8px; background: #00d4ff; color: #000; font-weight: bold; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; transition: 0.2s; white-space: nowrap;"><i icon="🎯"></i> TP/SL</button>
+            <button onclick="closePosModal()" style="padding: 8px; background: #ff6b6b; color: #fff; font-weight: bold; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; transition: 0.2s; white-space: nowrap;"><i icon="❌"></i> Close</button>
         </div>
         
         <!-- RECOMMENDATION -->
