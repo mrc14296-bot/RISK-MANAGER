@@ -246,7 +246,7 @@ def get_all_exchange_symbols(user_id=None):
     except Exception as e:
         print(f"⚠️ Symbol Fetch Error: {e}")
         
-    return ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "XAUUSD"]
+    return ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT"]
 
 def get_wallet_balances(user_id=None):
     """
