@@ -758,6 +758,115 @@ def trail_sl_api():
     result = logic.trail_stop_loss(symbol, current_user.id)
     return jsonify(result)
 
+# ✅ NEW ENDPOINTS FOR ADVANCED POSITION MANAGEMENT
+
+@app.route("/change_leverage", methods=["POST"])
+@login_required
+@subscription_required
+def change_leverage_api():
+    """Change leverage for a position"""
+    try:
+        data = request.get_json()
+        symbol = data.get('symbol')
+        leverage = int(data.get('leverage', 1))
+        
+        if not symbol or leverage < 1 or leverage > 125:
+            return jsonify({"success": False, "message": "Invalid symbol or leverage"}), 400
+        
+        client = logic.get_user_exchange_client(current_user.id)
+        if not client:
+            return jsonify({"success": False, "message": "Exchange not connected"}), 400
+        
+        # Change leverage on Binance
+        client.futures_change_leverage(symbol=symbol, leverage=leverage)
+        return jsonify({"success": True, "message": f"Leverage changed to {leverage}x"})
+    except Exception as e:
+        print(f"❌ Error changing leverage: {e}")
+        return jsonify({"success": False, "message": str(e)}), 500
+
+@app.route("/add_margin", methods=["POST"])
+@login_required
+@subscription_required
+def add_margin_api():
+    """Add margin to a position"""
+    try:
+        data = request.get_json()
+        symbol = data.get('symbol')
+        amount = float(data.get('amount', 0))
+        
+        if not symbol or amount <= 0:
+            return jsonify({"success": False, "message": "Invalid symbol or amount"}), 400
+        
+        client = logic.get_user_exchange_client(current_user.id)
+        if not client:
+            return jsonify({"success": False, "message": "Exchange not connected"}), 400
+        
+        # Add isolated margin
+        client.futures_positionside_dual(dualSidePosition=True)
+        client.futures_change_margin_type(symbol=symbol, marginType='ISOLATED')
+        client.futures_modify_isolated_position_margin(
+            symbol=symbol,
+            amount=amount,
+            type=1  # 1 = add margin
+        )
+        return jsonify({"success": True, "message": f"Added ${amount} margin"})
+    except Exception as e:
+        print(f"❌ Error adding margin: {e}")
+        return jsonify({"success": False, "message": str(e)}), 500
+
+@app.route("/set_tpsl", methods=["POST"])
+@login_required
+@subscription_required
+def set_tpsl_api():
+    """Set Take Profit and Stop Loss for a position"""
+    try:
+        data = request.get_json()
+        symbol = data.get('symbol')
+        tp_price = float(data.get('tp_price', 0))
+        sl_price = float(data.get('sl_price', 0))
+        
+        if not symbol or tp_price <= 0 or sl_price <= 0:
+            return jsonify({"success": False, "message": "Invalid parameters"}), 400
+        
+        client = logic.get_user_exchange_client(current_user.id)
+        if not client:
+            return jsonify({"success": False, "message": "Exchange not connected"}), 400
+        
+        # Get position to determine side
+        positions = client.futures_position_information(symbol=symbol)
+        if not positions:
+            return jsonify({"success": False, "message": "Position not found"}), 404
+        
+        position = positions[0]
+        side = position['positionSide']
+        
+        # Set TP - LIMIT order
+        tp_side = 'SELL' if side == 'LONG' else 'BUY'
+        client.futures_create_order(
+            symbol=symbol,
+            side=tp_side,
+            positionSide=side,
+            type='TAKE_PROFIT_MARKET',
+            stopPrice=tp_price,
+            closePosition=False
+        )
+        
+        # Set SL - STOP_MARKET order
+        sl_side = 'SELL' if side == 'LONG' else 'BUY'
+        client.futures_create_order(
+            symbol=symbol,
+            side=sl_side,
+            positionSide=side,
+            type='STOP_MARKET',
+            stopPrice=sl_price,
+            closePosition=False
+        )
+        
+        return jsonify({"success": True, "message": f"TP/SL set: TP ${tp_price} | SL ${sl_price}"})
+    except Exception as e:
+        print(f"❌ Error setting TP/SL: {e}")
+        return jsonify({"success": False, "message": str(e)}), 500
+
 @app.route("/api/live_pnl/<symbol>")
 @login_required
 @subscription_required

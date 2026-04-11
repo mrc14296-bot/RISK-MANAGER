@@ -267,6 +267,9 @@
           });
         </script>
 
+        <!-- ✅ INCLUDE ENHANCED POSITION DISPLAY SCRIPT -->
+        <script src="../templates/position_display.js"></script>
+
         <!-- DYNAMIC POSITION COUNTER -->
         <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
             <div class="header" style="margin: 0; flex: 1;" id="position_header">POSITIONS (0) | Open Orders (0)</div>
@@ -310,58 +313,9 @@
 </div>
 
 <script>
-    // Live Updates
-    function updateLivePositions() {
-        fetch('/get_open_positions')
-        .then(r => r.json())
-        .then(data => {
-            const container = document.getElementById('live_positions');
-            const header = document.getElementById('position_header');
-            if (data.positions && data.positions.length > 0) {
-                let totalOrders = 0;
-                let html = '';
-                data.positions.forEach(pos => {
-                    const pnlColor = pos.unrealized_pnl >= 0 ? '#00ff88' : '#ff4d4d';
-                    const roiPercent = (pos.dashboard_roi_percent ?? pos.roi_percent).toFixed(1);
-                    const marginRatio = (pos.dashboard_margin_ratio ?? pos.margin_ratio).toFixed(2);
-                    totalOrders += pos.open_orders ? pos.open_orders.length : 0;
-                    html += `
-                        <div style="border: 1px solid #333; padding: 12px; margin-bottom: 8px; border-radius: 6px; background: #111;">
-                            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                                <span style="font-weight: bold; color: ${pos.side === 'LONG' ? '#00ff88' : '#ff4444'}; cursor: pointer;" onclick="showCoinDetails()" title="Click to see exact details">${pos.symbol}</span>
-                                <small>${pos.leverage}x | Entry: $${pos.entry_price.toFixed(4)}</small>
-                            </div>
-                            <div>PnL: <span style="color: ${pnlColor};">$${pos.unrealized_pnl.toFixed(2)}</span></div>
-                            <div style="cursor: pointer; user-select: none;" onclick="showCoinDetails()" title="Click to see calculation breakdown">
-                                ROI: <span style="color: ${pnlColor}; font-weight: bold; text-decoration: underline;">${roiPercent}%</span> 
-                                <span style="color: #888; font-size: 10px;">(click for details)</span>
-                            </div>
-                            <div>Margin: $${pos.margin_usdt.toFixed(2)} | Size: $${pos.size_usdt.toFixed(2)}</div>
-                            <div style="cursor: pointer; user-select: none;" onclick="showCoinDetails()" title="Click to see calculation breakdown">
-                                Margin Ratio: <span style="color: #ffaa00; font-weight: bold; text-decoration: underline;">${marginRatio}%</span> 
-                                <span style="color: #888; font-size: 10px;">(click for details)</span>
-                            </div>
-                            ${pos.open_orders && pos.open_orders.length > 0 ? `<div style="margin-top:8px; font-size: 11px; color:#aaa;"><strong>Open orders:</strong> ${pos.open_orders.map(o => `${o.type} ${o.side} @${o.price}`).join(' • ')}</div>` : ''}
-                            <div style="margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap;">
-                                <button onclick="closePosition('${pos.symbol}')" style="background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;">Close</button>
-                                <button onclick="partialClose('${pos.symbol}')" style="background: #0d6efd; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;">Close %</button>
-                                <button onclick="moveTrailingSL('${pos.symbol}')" style="background: #4d1a1a; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;">Trail SL</button>
-                                <button onclick="showCoinDetails()" style="background: #17a2b8; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;">📊 Details</button>
-                            </div>
-                        </div>
-                    `;
-                });
-                header.textContent = `POSITIONS (${data.positions.length}) | Orders (${totalOrders})`;
-                container.innerHTML = html;
-            } else {
-                header.textContent = 'POSITIONS (0)';
-                container.innerHTML = '<div style="text-align: center; color: #888; padding-top: 60px;">No open positions<br><small>Connect Binance account</small></div>';
-            }
-        }).catch(() => {
-            document.getElementById('live_positions').innerHTML = '<div style="text-align: center; color: #ff4444; padding: 60px;">Connection Error</div>';
-        });
-    }
-
+    // ✅ POSITION DISPLAY NOW LOADED FROM position_display.js
+    // This includes: updateLivePositions, leverage/margin/tpsl modals
+    
     function updateTradeHistory() {
         fetch('/get_trade_history')
         .then(r => r.json())
