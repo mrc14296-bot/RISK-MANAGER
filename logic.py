@@ -655,9 +655,8 @@ def get_open_positions(user_id=None):
                 # ROI percent (Binance-style, based on margin used)
                 roi_percent = (unrealized_pnl / initial_margin * 100) if initial_margin > 0 else 0
 
-                # Dashboard ROI should show actual ROI% on margin used (NOT multiplied by leverage)
-                # ROI is already accounting for leveraged position via the unrealized_pnl amount
-                dashboard_roi_percent = roi_percent
+                # Dashboard ROI multiplied by leverage - includes leverage tax effect
+                dashboard_roi_percent = roi_percent * leverage
 
                 # Margin ratio (Binance-style) - shows % buffer before liquidation
                 if mark_price > 0 and liquidation_price > 0:
@@ -725,8 +724,8 @@ def get_open_positions_live(user_id=None):
                 # ROI percent (Binance-style, based on margin used)
                 roi_percent = (unrealized_pnl / initial_margin * 100) if initial_margin > 0 else 0
 
-                # Dashboard ROI should show actual ROI% on margin used (NOT multiplied by leverage)
-                dashboard_roi_percent = roi_percent
+                # Dashboard ROI multiplied by leverage - includes leverage tax effect
+                dashboard_roi_percent = roi_percent * leverage
 
                 # Margin ratio (Binance-style) - shows % buffer before liquidation
                 if mark_price > 0 and liquidation_price > 0:
