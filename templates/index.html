@@ -2,6 +2,7 @@
 <html>
 <head>
     <title>MindRiskControl</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="../static/style.css">
 <style>
         html, body {
@@ -34,7 +35,7 @@
         }
         .dashboard-chart {
             width: 100%;
-            height: clamp(155px, 21vh, 200px);
+            height: clamp(175px, 23vh, 230px);
             flex: 0 0 auto;
         }
         .dashboard-card {
@@ -94,17 +95,46 @@
         }
         @media (max-height: 920px) {
             .dashboard-chart {
-                height: 145px;
+                height: 160px;
             }
         }
         @media (max-height: 760px) {
             .dashboard-chart {
-                height: 130px;
+                height: 140px;
             }
         }
         @media (max-width: 1200px) {
             .dashboard-bottom-row {
                 grid-template-columns: 1fr;
+            }
+        }
+        @media (max-width: 900px) {
+            html, body {
+                height: auto;
+                overflow-x: hidden;
+                overflow-y: auto;
+            }
+            .container {
+                height: auto;
+                min-height: 100vh;
+            }
+            .panel.right.dashboard-right {
+                overflow: visible;
+            }
+            .dashboard-right {
+                height: auto;
+                overflow: visible;
+                gap: 10px;
+            }
+            .dashboard-chart {
+                height: 300px;
+            }
+            .positions-scroll {
+                max-height: 220px;
+            }
+            .trade-history-box {
+                min-height: 220px;
+                max-height: 280px;
             }
         }
     </style>
@@ -343,6 +373,7 @@
 
         <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
         <script type="text/javascript">
+          const isMobileChart = window.matchMedia('(max-width: 900px)').matches;
           new TradingView.widget({
             "autosize": true,
             "symbol": "BINANCE:{{ selected_symbol or 'BTCUSDT' }}",
@@ -353,7 +384,7 @@
             "locale": "en",
             "toolbar_bg": "#f1f3f6",
             "enable_publishing": false,
-            "hide_top_toolbar": false,
+            "hide_top_toolbar": isMobileChart,
             "save_image": false,
             "container_id": "tv_chart"
           });
