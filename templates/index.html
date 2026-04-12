@@ -889,16 +889,12 @@
                                     `;
                                     
                             posDetailsDiv.innerHTML = breakdownHTML;
-                            // Show action buttons when position exists
-                            document.getElementById('modal-action-buttons').style.display = 'grid';
                                 } catch (parseErr) {
                                     console.error('Position parsing error:', parseErr);
                                     posDetailsDiv.innerHTML = '<div style="color: #ff6b6b; font-size: 11px;">⚠️ Position data format error</div>';
                                 }
                             } else {
                                 posDetailsDiv.innerHTML = '<div style="color: #888; font-size: 11px; padding: 8px; text-align: center;">✅ No open position for this symbol</div>';
-                                // Hide action buttons when no position
-                                document.getElementById('modal-action-buttons').style.display = 'none';
                             }
                             posDetailsDiv.style.display = 'block';
                             console.log('✅ Modal updated successfully');
@@ -1001,8 +997,8 @@
             <!-- Filled dynamically by JS -->
         </div>
         
-        <!-- ACTION BUTTONS (visible only with open position) -->
-        <div id="modal-action-buttons" style="display: none; gap: 8px; margin-bottom: 10px; display: grid; grid-template-columns: 1fr 1fr 1fr;">
+        <!-- ACTION BUTTONS (always visible) -->
+        <div id="modal-action-buttons" style="display: grid; gap: 8px; margin-bottom: 10px; grid-template-columns: 1fr 1fr 1fr;">
             <button onclick="editLeverageMod()" style="padding: 8px; background: #ffaa00; color: #000; font-weight: bold; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; transition: 0.2s; white-space: nowrap;"><i icon="⚙️"></i> Leverage</button>
             <button onclick="editTPSLMod()" style="padding: 8px; background: #00d4ff; color: #000; font-weight: bold; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; transition: 0.2s; white-space: nowrap;"><i icon="🎯"></i> TP/SL</button>
             <button onclick="closePosModal()" style="padding: 8px; background: #ff6b6b; color: #fff; font-weight: bold; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; transition: 0.2s; white-space: nowrap;"><i icon="❌"></i> Close</button>
