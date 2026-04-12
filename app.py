@@ -685,6 +685,30 @@ def get_open_positions_api():
     positions = logic.get_open_positions(current_user.id)
     return jsonify({"positions": positions})
 
+@app.route("/api/liquidation_prices")
+@login_required
+@subscription_required
+def get_liquidation_prices_api():
+    """LIVE liquidation prices - fetched fresh every time (NO CACHE)"""
+    try:
+        positions = logic.get_open_positions_live(current_user.id)  # Fresh fetch, no cache
+        liquidation_data = {}
+        for pos in positions:
+            liquidation_data[pos['symbol']] = {
+                'liquidation_price': pos['liquidation_price'],
+                'mark_price': pos['mark_price'],
+                'entry_price': pos['entry_price'],
+                'leverage': pos['leverage'],
+                'unrealized_pnl': pos['unrealized_pnl'],
+                'roi_percent': pos['roi_percent'],
+                'margin_ratio': pos.get('margin_ratio', 0),
+                'timestamp': pos['timestamp']
+            }
+        return jsonify({"success": True, "liquidation_prices": liquidation_data})
+    except Exception as e:
+        print(f"Error fetching liquidation prices: {e}")
+        return jsonify({"success": False, "error": str(e)})
+
 @app.route("/get_trade_history")
 @login_required
 @subscription_required

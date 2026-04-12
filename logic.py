@@ -628,8 +628,9 @@ def get_open_positions(user_id=None):
     current_time = time.time()
     cache_key = f"positions_{user_id or 'public'}"
     
-    # Return cached positions if less than 30 seconds old
-    if cache_key in _positions_cache and (current_time - _positions_cache_time.get(cache_key, 0)) < 30:
+    # Return cached positions if less than 5 seconds old (for LIVE liquidation price updates)
+    # Reduced from 30s to 5s for real-time liquidation price data
+    if cache_key in _positions_cache and (current_time - _positions_cache_time.get(cache_key, 0)) < 5:
         return _positions_cache[cache_key]
     
     try:
@@ -651,19 +652,21 @@ def get_open_positions(user_id=None):
                 notional = float(pos.get('notional', 0))
                 
                 initial_margin = abs(notional) / leverage if leverage > 0 else abs(notional)
-                # ROI percent (Binance-style, not multiplied)
+                # ROI percent (Binance-style, based on margin used)
                 roi_percent = (unrealized_pnl / initial_margin * 100) if initial_margin > 0 else 0
 
-                # Dashboard ROI and margin ratio should be multiplied by leverage for correct reporting
-                dashboard_roi_percent = roi_percent * leverage
+                # Dashboard ROI should show actual ROI% on margin used (NOT multiplied by leverage)
+                # ROI is already accounting for leveraged position via the unrealized_pnl amount
+                dashboard_roi_percent = roi_percent
 
-                # Margin ratio (Binance-style, not multiplied)
+                # Margin ratio (Binance-style) - shows % buffer before liquidation
                 if mark_price > 0 and liquidation_price > 0:
                     margin_ratio = ((mark_price - liquidation_price) / mark_price) * 100 if position_amt > 0 else ((liquidation_price - mark_price) / mark_price) * 100
                 else: 
                     margin_ratio = 0
 
-                dashboard_margin_ratio = abs(margin_ratio) * leverage
+                # Dashboard margin ratio shows actual margin buffer (NOT multiplied by leverage)
+                dashboard_margin_ratio = abs(margin_ratio)
                 
                 open_orders = get_open_orders_for_symbol(pos.get('symbol'), user_id)
                 
@@ -674,12 +677,12 @@ def get_open_positions(user_id=None):
                     'size_usdt': abs(notional), 
                     'margin_usdt': initial_margin,
                     'margin_ratio': abs(margin_ratio),  # Raw
-                    'dashboard_margin_ratio': dashboard_margin_ratio,  # Multiplied by leverage
+                    'dashboard_margin_ratio': dashboard_margin_ratio,  # Actual margin buffer %
                     'entry_price': entry_price, 
                     'mark_price': mark_price,
                     'unrealized_pnl': unrealized_pnl, 
                     'roi_percent': roi_percent,  # Raw
-                    'dashboard_roi_percent': dashboard_roi_percent,  # Multiplied by leverage
+                    'dashboard_roi_percent': dashboard_roi_percent,  # Actual ROI %
                     'leverage': leverage,
                     'liquidation_price': liquidation_price, 
                     'open_orders': open_orders,
@@ -692,6 +695,73 @@ def get_open_positions(user_id=None):
         return open_positions
     except Exception as e:
         print(f"Error getting open positions: {e}")
+        return []
+
+def get_open_positions_live(user_id=None):
+    """
+    ✅ LIVE VERSION - Fetches fresh position data WITHOUT caching
+    Used specifically for real-time liquidation price updates
+    This bypasses all caching to ensure the most current data
+    """
+    try:
+        client = get_client(user_id)
+        if client is None: 
+            return []
+        
+        positions = client.futures_position_information(recvWindow=10000)
+        open_positions = []
+        
+        for pos in positions:
+            position_amt = float(pos.get('positionAmt', 0))
+            if abs(position_amt) > 0:
+                entry_price = float(pos.get('entryPrice', 0))
+                mark_price = float(pos.get('markPrice', 0))
+                unrealized_pnl = float(pos.get('unRealizedProfit', 0))
+                liquidation_price = float(pos.get('liquidationPrice', 0))
+                leverage = int(pos.get('leverage', 1))
+                notional = float(pos.get('notional', 0))
+                
+                initial_margin = abs(notional) / leverage if leverage > 0 else abs(notional)
+                # ROI percent (Binance-style, based on margin used)
+                roi_percent = (unrealized_pnl / initial_margin * 100) if initial_margin > 0 else 0
+
+                # Dashboard ROI should show actual ROI% on margin used (NOT multiplied by leverage)
+                dashboard_roi_percent = roi_percent
+
+                # Margin ratio (Binance-style) - shows % buffer before liquidation
+                if mark_price > 0 and liquidation_price > 0:
+                    margin_ratio = ((mark_price - liquidation_price) / mark_price) * 100 if position_amt > 0 else ((liquidation_price - mark_price) / mark_price) * 100
+                else: 
+                    margin_ratio = 0
+
+                # Dashboard margin ratio shows actual margin buffer (NOT multiplied by leverage)
+                dashboard_margin_ratio = abs(margin_ratio)
+                
+                open_orders = get_open_orders_for_symbol(pos.get('symbol'), user_id)
+                
+                open_positions.append({
+                    'symbol': pos.get('symbol'), 
+                    'side': 'LONG' if position_amt > 0 else 'SHORT',
+                    'amount': abs(position_amt), 
+                    'size_usdt': abs(notional), 
+                    'margin_usdt': initial_margin,
+                    'margin_ratio': abs(margin_ratio),  # Raw
+                    'dashboard_margin_ratio': dashboard_margin_ratio,  # Actual margin buffer %
+                    'entry_price': entry_price, 
+                    'mark_price': mark_price,
+                    'unrealized_pnl': unrealized_pnl, 
+                    'roi_percent': roi_percent,  # Raw
+                    'dashboard_roi_percent': dashboard_roi_percent,  # Actual ROI %
+                    'leverage': leverage,
+                    'liquidation_price': liquidation_price, 
+                    'open_orders': open_orders,
+                    'timestamp': datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+                })
+        
+        # NO CACHING - Return fresh data immediately
+        return open_positions
+    except Exception as e:
+        print(f"Error getting live open positions: {e}")
         return []
 
 def get_open_orders_for_symbol(symbol, user_id=None):

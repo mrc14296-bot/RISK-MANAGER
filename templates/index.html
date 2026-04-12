@@ -310,49 +310,97 @@
 </div>
 
 <script>
-    // Live Updates
+    // Store positions data for real-time updates
+    let currentPositions = {};
+    
+    // Live Updates - Enhanced with real-time liquidation prices
     function updateLivePositions() {
+        // Fetch main positions data (5-second cache)
         fetch('/get_open_positions')
         .then(r => r.json())
         .then(data => {
-            const container = document.getElementById('live_positions');
-            const header = document.getElementById('position_header');
             if (data.positions && data.positions.length > 0) {
-                let totalOrders = 0;
-                let html = '';
+                currentPositions = {};
                 data.positions.forEach(pos => {
-                    const pnlColor = pos.unrealized_pnl >= 0 ? '#00ff88' : '#ff4d4d';
-                    const roiPercent = (pos.dashboard_roi_percent ?? pos.roi_percent).toFixed(1);
-                    const marginRatio = (pos.dashboard_margin_ratio ?? pos.margin_ratio).toFixed(2);
-                    totalOrders += pos.open_orders ? pos.open_orders.length : 0;
-                    html += `
-                        <div style="border: 1px solid #333; padding: 12px; margin-bottom: 8px; border-radius: 6px; background: #111;">
-                            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                                <span style="font-weight: bold; color: ${pos.side === 'LONG' ? '#00ff88' : '#ff4444'}">${pos.symbol}</span>
-                                <small>${pos.leverage}x | Entry: $${pos.entry_price.toFixed(4)}</small>
-                            </div>
-                            <div>PnL: <span style="color: ${pnlColor};">$${pos.unrealized_pnl.toFixed(2)}</span></div>
-                            <div>ROI: <span style="color: ${pnlColor};">${roiPercent}%</span></div>
-                            <div>Margin: $${pos.margin_usdt.toFixed(2)} | Size: $${pos.size_usdt.toFixed(2)}</div>
-                            <div>Margin Ratio: <span style="color: #ffaa00;">${marginRatio}%</span></div>
-                            ${pos.open_orders && pos.open_orders.length > 0 ? `<div style="margin-top:8px; font-size: 11px; color:#aaa;"><strong>Open orders:</strong> ${pos.open_orders.map(o => `${o.type} ${o.side} @${o.price}`).join(' • ')}</div>` : ''}
-                            <div style="margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap;">
-                                <button onclick="closePosition('${pos.symbol}')" style="background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">Close</button>
-                                <button onclick="partialClose('${pos.symbol}')" style="background: #0d6efd; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">Close %</button>
-                                <button onclick="moveTrailingSL('${pos.symbol}')" style="background: #4d1a1a; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">Trail SL</button>
-                            </div>
-                        </div>
-                    `;
+                    currentPositions[pos.symbol] = pos;
                 });
-                header.textContent = `POSITIONS (${data.positions.length}) | Open Orders (${totalOrders})`;
-                container.innerHTML = html;
-            } else {
-                header.textContent = 'POSITIONS (0)';
-                container.innerHTML = '<div style="text-align: center; color: #888; padding-top: 60px;">No open positions<br><small>Connect Binance account</small></div>';
+                
+                // Also fetch LIVE liquidation prices (no cache) every 2 seconds for real-time updates
+                updateLiveDataOnly();
             }
+            renderPositions();
         }).catch(() => {
             document.getElementById('live_positions').innerHTML = '<div style="text-align: center; color: #ff4444; padding: 60px;">Connection Error</div>';
         });
+    }
+    
+    // Fetch ONLY liquidation prices live (NO cache) - run more frequently
+    function updateLiveDataOnly() {
+        fetch('/api/liquidation_prices')
+        .then(r => r.json())
+        .then(data => {
+            if (data.success && data.liquidation_prices) {
+                // Update only the liquidation-related fields with fresh data
+                Object.keys(data.liquidation_prices).forEach(symbol => {
+                    if (currentPositions[symbol]) {
+                        const liveData = data.liquidation_prices[symbol];
+                        currentPositions[symbol].liquidation_price = liveData.liquidation_price;
+                        currentPositions[symbol].mark_price = liveData.mark_price;
+                        currentPositions[symbol].unrealized_pnl = liveData.unrealized_pnl;
+                        currentPositions[symbol].roi_percent = liveData.roi_percent;
+                        currentPositions[symbol].dashboard_roi_percent = liveData.roi_percent;
+                        currentPositions[symbol].margin_ratio = liveData.margin_ratio;
+                        currentPositions[symbol].dashboard_margin_ratio = liveData.margin_ratio;
+                        currentPositions[symbol].timestamp = liveData.timestamp;
+                    }
+                });
+                // Re-render with updated data
+                renderPositions();
+            }
+        }).catch(err => {
+            console.log("Live data update error (non-critical):", err);
+        });
+    }
+    
+    // Render positions with current data
+    function renderPositions() {
+        const container = document.getElementById('live_positions');
+        const header = document.getElementById('position_header');
+        const positions = Object.values(currentPositions);
+        
+        if (positions.length > 0) {
+            let totalOrders = 0;
+            let html = '';
+            positions.forEach(pos => {
+                const pnlColor = pos.unrealized_pnl >= 0 ? '#00ff88' : '#ff4d4d';
+                const roiPercent = (pos.dashboard_roi_percent ?? pos.roi_percent).toFixed(1);
+                const marginRatio = (pos.dashboard_margin_ratio ?? pos.margin_ratio).toFixed(2);
+                totalOrders += pos.open_orders ? pos.open_orders.length : 0;
+                html += `
+                    <div style="border: 1px solid #333; padding: 12px; margin-bottom: 8px; border-radius: 6px; background: #111;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                            <span style="font-weight: bold; color: ${pos.side === 'LONG' ? '#00ff88' : '#ff4444'}">${pos.symbol}</span>
+                            <small>${pos.leverage}x | Entry: $${pos.entry_price.toFixed(4)} | Liq: $${pos.liquidation_price.toFixed(4)}</small>
+                        </div>
+                        <div>PnL: <span style="color: ${pnlColor};">$${pos.unrealized_pnl.toFixed(2)}</span></div>
+                        <div>ROI: <span style="color: ${pnlColor};">${roiPercent}%</span></div>
+                        <div>Margin: $${pos.margin_usdt.toFixed(2)} | Size: $${pos.size_usdt.toFixed(2)}</div>
+                        <div>Margin Ratio: <span style="color: #ffaa00;">${marginRatio}%</span> | Mark: $${pos.mark_price.toFixed(4)}</div>
+                        ${pos.open_orders && pos.open_orders.length > 0 ? `<div style="margin-top:8px; font-size: 11px; color:#aaa;"><strong>Open orders:</strong> ${pos.open_orders.map(o => `${o.type} ${o.side} @${o.price}`).join(' • ')}</div>` : ''}
+                        <div style="margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap;">
+                            <button onclick="closePosition('${pos.symbol}')" style="background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">Close</button>
+                            <button onclick="partialClose('${pos.symbol}')" style="background: #0d6efd; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">Close %</button>
+                            <button onclick="moveTrailingSL('${pos.symbol}')" style="background: #4d1a1a; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">Trail SL</button>
+                        </div>
+                    </div>
+                `;
+            });
+            header.textContent = `POSITIONS (${positions.length}) | Open Orders (${totalOrders})`;
+            container.innerHTML = html;
+        } else {
+            header.textContent = 'POSITIONS (0)';
+            container.innerHTML = '<div style="text-align: center; color: #888; padding-top: 60px;">No open positions<br><small>Connect Binance account</small></div>';
+        }
     }
 
     function updateTradeHistory() {
@@ -665,6 +713,7 @@
     // Auto refresh intervals - OPTIMIZED for performance
     setInterval(updateLivePrice, 5000);     // Price 5s (was 1s - too frequent for external API)
     setInterval(updateLivePositions, 10000); // Positions 10s (was 3s - reduce Binance API calls)
+    setInterval(updateLiveDataOnly, 2000);  // ✅ LIVE Liquidation Prices: 2s (real-time updates)
     setInterval(updateTradeHistory, 30000);  // History 30s (was 5s - trade history doesn't change often)
     setInterval(updateTradeLimits, 10000);  // Limits 10s (unchanged - local data)
     setInterval(updateLiveTradeLog, 2000);  // Live log 2s (unchanged - local data)
