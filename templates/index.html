@@ -221,6 +221,9 @@
             background: linear-gradient(135deg, #ff7f7f 0%, #ff3d3d 100%);
             color: #fff;
         }
+        #validation-warnings {
+            display: none !important;
+        }
         .recent-trades-card {
             padding: 8px;
             border-color: #333;
@@ -494,8 +497,8 @@
             </div>
 
             <button type="submit" name="place_order" class="place" data-testid="execute-order-button"
-                    {% if default_sl_value <= 0 %} disabled style="filter: grayscale(1); padding: 3px;" {% endif %}
-                    onclick="return confirmTradeExecution()" style="font-size: 9px; padding: 3px; margin-bottom: 4px;">
+                    {% if default_sl_value <= 0 %} disabled style="filter: grayscale(1); padding: 2px 8px; min-height: 20px; font-size: 8px;" {% endif %}
+                    onclick="return confirmTradeExecution()" style="font-size: 8px; padding: 2px 8px; min-height: 20px; margin-bottom: 3px;">
                 {% if default_sl_value <= 0 %} 
                     🔒 SET SL FIRST
                 {% else %} 
@@ -523,8 +526,6 @@
                             Pos: ${{ sizing.suggested_position_value | round(2) }}
                         </span>
                     </details>
-                {% else %}
-                    <div class="error" style="font-size: 9px;">{{ sizing.error }}</div>
                 {% endif %}
             </div>
             
