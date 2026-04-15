@@ -245,7 +245,11 @@ def get_all_exchange_symbols(user_id=None):
             
     except Exception as e:
         print(f"⚠️ Symbol Fetch Error: {e}")
+        # Use cached symbols if available, otherwise return fallback
+        if _symbol_cache:
+            return _symbol_cache
         
+    # Fallback: return minimal symbol set
     return ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT"]
 
 def get_wallet_balances(user_id=None):
@@ -406,12 +410,14 @@ def get_live_balance(user_id=None):
 
 def get_live_price(symbol, user_id=None):
     """Bulletproof price fetch securely converting string -> float"""
-    global _price_cache, _last_call_time
+    global _price_cache, _price_cache_time
     current_time = time.time()
     cache_key = f"{symbol}_{user_id or 'public'}"
     
-    if cache_key in _price_cache and (current_time - _last_call_time) < 10:
-        return _price_cache[cache_key]
+    # Check cache with per-symbol expiration
+    if cache_key in _price_cache and cache_key in _price_cache_time:
+        if (current_time - _price_cache_time[cache_key]) < 10:
+            return _price_cache[cache_key]
     
     try:
         client = get_client(user_id)
@@ -420,7 +426,7 @@ def get_live_price(symbol, user_id=None):
             price = float(ticker.get('price', 0))
             if price > 0:
                 _price_cache[cache_key] = price
-                _last_call_time = current_time
+                _price_cache_time[cache_key] = current_time
                 return price
     except Exception:
         pass
@@ -440,7 +446,7 @@ def get_live_price(symbol, user_id=None):
                     price = float(price_key)
                     if price > 0:
                         _price_cache[cache_key] = price
-                        _last_call_time = current_time
+                        _price_cache_time[cache_key] = current_time
                         return price
         except Exception:
             continue
@@ -448,6 +454,7 @@ def get_live_price(symbol, user_id=None):
     fallback_prices = {'BTCUSDT': 93450.0, 'ETHUSDT': 3500.0, 'BNBUSDT': 600.0, 'SOLUSDT': 180.0}
     price = fallback_prices.get(symbol, 1.0)
     _price_cache[cache_key] = price
+    _price_cache_time[cache_key] = current_time
     return price
 
 def get_symbol_filters(symbol, user_id=None):

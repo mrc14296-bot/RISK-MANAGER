@@ -991,8 +991,9 @@ def index():
     today_stats = logic.get_today_stats(current_user.id)
     
     # -------------------------------------
-
-    selected_symbol = request.form.get("symbol", "BTCUSDT")
+    # FIXED: Get symbol from URL query params and form data, use first symbol as default
+    default_first_symbol = symbols[0] if symbols and len(symbols) > 0 else "BTCUSDT"
+    selected_symbol = request.args.get("symbol") or request.form.get("symbol") or default_first_symbol
     side = request.form.get("side", "LONG")
     order_type = request.form.get("order_type", "MARKET")
     margin_mode = request.form.get("margin_mode", "ISOLATED")

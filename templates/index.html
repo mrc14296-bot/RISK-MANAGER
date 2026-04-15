@@ -572,20 +572,52 @@
 
         <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
         <script type="text/javascript">
-          const isMobileChart = window.matchMedia('(max-width: 900px)').matches;
-          new TradingView.widget({
-            "autosize": true,
-            "symbol": "BINANCE:{{ selected_symbol or 'BTCUSDT' }}",
-            "interval": "5",
-            "timezone": "Etc/UTC",
-            "theme": "dark",
-            "style": "1",
-            "locale": "en",
-            "toolbar_bg": "#f1f3f6",
-            "enable_publishing": false,
-            "hide_top_toolbar": isMobileChart,
-            "save_image": false,
-            "container_id": "tv_chart"
+          let tvWidget = null;
+          const selectedSymbol = "{{ selected_symbol or 'BTCUSDT' }}";
+          
+          function initializeTradingViewChart() {
+            const isMobileChart = window.matchMedia('(max-width: 900px)').matches;
+            const chartContainer = document.getElementById('tv_chart');
+            
+            // Clear previous widget if it exists
+            if (tvWidget) {
+              try {
+                tvWidget.remove();
+              } catch (e) {
+                console.log('Previous chart cleanup skipped');
+              }
+            }
+            
+            tvWidget = new TradingView.widget({
+              "autosize": true,
+              "symbol": "BINANCE:" + selectedSymbol,
+              "interval": "5",
+              "timezone": "Etc/UTC",
+              "theme": "dark",
+              "style": "1",
+              "locale": "en",
+              "toolbar_bg": "#f1f3f6",
+              "enable_publishing": false,
+              "hide_top_toolbar": isMobileChart,
+              "save_image": false,
+              "container_id": "tv_chart"
+            });
+          }
+          
+          // Initialize chart on page load
+          if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializeTradingViewChart);
+          } else {
+            initializeTradingViewChart();
+          }
+          
+          // Re-initialize chart when form is submitted with new symbol
+          window.addEventListener('beforeunload', function() {
+            const newSymbol = document.querySelector('select[name="symbol"]')?.value;
+            if (newSymbol && newSymbol !== selectedSymbol) {
+              // Redirect with symbol parameter to ensure fresh chart load
+              window.location.href = '/index?symbol=' + encodeURIComponent(newSymbol);
+            }
           });
         </script>
 
@@ -593,7 +625,7 @@
         <div class="dashboard-card coin-analysis-card">
             <div class="coin-analysis-header">
                 <div>
-                    <h3 class="coin-analysis-title">Analysis - <span id="embed-modal-symbol" style="color: #00ff88;">BTCUSDT</span></h3>
+                    <h3 class="coin-analysis-title">Analysis - <span id="embed-modal-symbol" style="color: #00ff88;">{{ selected_symbol or 'BTCUSDT' }}</span></h3>
                     <p class="coin-analysis-subtitle">Compact live trade snapshot</p>
                 </div>
                 <div class="analysis-badge">Auto Refresh</div>
@@ -1280,17 +1312,9 @@
 
     // ✅ PRESERVE FORM STATE when changing coins
     function changeSymbol(symbol) {
-        const form = document.querySelector('form');
-        const formData = new FormData(form);
-        
-        // Submit form to load new coin data but preserve all other fields
-        const input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = 'symbol';
-        input.value = symbol;
-        
-        form.appendChild(input);
-        form.submit();
+        // Redirect to index with symbol parameter to ensure fresh page load
+        // This ensures TradingView chart updates properly
+        window.location.href = '/index?symbol=' + encodeURIComponent(symbol);
     }
 
     // ✅ SHOW COIN DETAILS IN MODAL (WITH REAL-TIME DATA)
@@ -1547,7 +1571,7 @@
     <div style="display:flex; align-items:center; justify-content:center; width:100%; height:100%;">
         <div style="background-color: #0d1117; padding: 20px; border: 2px solid #00d4ff; border-radius: 8px; width: 90%; max-width: 600px; color: #fff; max-height: 90vh; overflow-y: auto; box-shadow: 0 0 30px rgba(0, 212, 255, 0.3);" onclick="event.stopPropagation();">
         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #00d4ff; padding-bottom: 10px; margin-bottom: 15px;">
-            <h3 style="color: #00d4ff; margin: 0; font-size: 16px;">ℹ️ <span id="modal-symbol" style="color: #00ff88;">BTCUSDT</span></h3>
+            <h3 style="color: #00d4ff; margin: 0; font-size: 16px;">ℹ️ <span id="modal-symbol" style="color: #00ff88;">{{ selected_symbol or 'BTCUSDT' }}</span></h3>
             <span onclick="closeCoinModal()" style="color: #ff6b6b; font-size: 24px; font-weight: bold; cursor: pointer; line-height: 1;">&times;</span>
         </div>
         
