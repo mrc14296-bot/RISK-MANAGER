@@ -412,12 +412,23 @@ def get_live_price(symbol, user_id=None):
     """Bulletproof price fetch securely converting string -> float"""
     global _price_cache, _price_cache_time
     current_time = time.time()
+    
+    # ✅ DEFENSIVE: Strip whitespace and validate symbol format
+    symbol = (symbol or '').strip().upper()
+    if not symbol or len(symbol) < 6:
+        print(f"⚠️ Invalid symbol format: '{symbol}' - using fallback")
+        symbol = 'BTCUSDT'
+    
     cache_key = f"{symbol}_{user_id or 'public'}"
     
     # Check cache with per-symbol expiration
     if cache_key in _price_cache and cache_key in _price_cache_time:
         if (current_time - _price_cache_time[cache_key]) < 10:
-            return _price_cache[cache_key]
+            cached_price = _price_cache[cache_key]
+            print(f"✓ Price cache HIT for {symbol}: ${cached_price}")
+            return cached_price
+    
+    print(f"🔄 Price cache MISS for {symbol} - fetching fresh...")
     
     try:
         client = get_client(user_id)
@@ -427,9 +438,10 @@ def get_live_price(symbol, user_id=None):
             if price > 0:
                 _price_cache[cache_key] = price
                 _price_cache_time[cache_key] = current_time
+                print(f"✅ Got price from client API: {symbol} = ${price}")
                 return price
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"⚠️ Client price fetch failed for {symbol}: {e}")
     
     public_endpoints = [
         f"https://fapi.binance.com/fapi/v1/ticker/price?symbol={symbol}",
@@ -447,14 +459,18 @@ def get_live_price(symbol, user_id=None):
                     if price > 0:
                         _price_cache[cache_key] = price
                         _price_cache_time[cache_key] = current_time
+                        print(f"✅ Got price from public API: {symbol} = ${price}")
                         return price
-        except Exception:
+        except Exception as e:
+            print(f"⚠️ Public API fetch failed ({url}): {e}")
             continue
     
+    # Fallback prices as last resort
     fallback_prices = {'BTCUSDT': 93450.0, 'ETHUSDT': 3500.0, 'BNBUSDT': 600.0, 'SOLUSDT': 180.0}
     price = fallback_prices.get(symbol, 1.0)
     _price_cache[cache_key] = price
     _price_cache_time[cache_key] = current_time
+    print(f"⚠️ Using FALLBACK price for {symbol}: ${price}")
     return price
 
 def get_symbol_filters(symbol, user_id=None):

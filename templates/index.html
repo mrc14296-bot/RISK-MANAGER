@@ -1128,34 +1128,61 @@
     }
 
     function updateLivePrice() {
-        const symbol = document.querySelector('select[name="symbol"]').value || 'BTCUSDT';
+        const symbolSelect = document.querySelector('select[name="symbol"]');
+        const symbol = symbolSelect ? symbolSelect.value : 'BTCUSDT';
+        
+        // ✅ DEFENSIVE: Ensure symbol is not empty or default fallback
+        if (!symbol || symbol === '') {
+            console.warn('⚠️ No symbol found in dropdown, using BTCUSDT fallback');
+            document.querySelector('select[name="symbol"]').value = 'BTCUSDT';
+            return;
+        }
+        
         const entryInput = document.getElementById('entry_input');
         const indicator = document.getElementById('live-indicator');
         const resetBtn = document.getElementById('reset-live-btn');
+        
+        if (!entryInput) {
+            console.error('❌ Entry input element not found');
+            return;
+        }
+        
+        console.log(`📡 Fetching live price for: ${symbol}`);
         
         fetch(`/get_live_price/${symbol}`)
         .then(r => r.json())
         .then(data => {
             if (data.price && data.price > 0) {
                 const oldValue = parseFloat(entryInput.value) || 0;
-                entryInput.value = data.price;
-                
-                // Visual feedback
-                indicator.style.display = 'inline-block';
-                entryInput.style.background = '#1a1a2e';
-                entryInput.style.transition = 'background 0.3s';
-                
-                setTimeout(() => {
-                    indicator.style.display = 'none';
-                    entryInput.style.background = '';
-                }, 2000);
-                
-                console.log(`🔄 Live price updated: ${oldValue.toFixed(4)} → ${data.price.toFixed(4)}`);
+                // ✅ Only update if price is different (avoid unnecessary updates)
+                if (Math.abs(oldValue - data.price) / Math.max(oldValue, data.price) > 0.01 || oldValue === 0) {
+                    entryInput.value = data.price;
+                    
+                    // Visual feedback
+                    if (indicator) {
+                        indicator.style.display = 'inline-block';
+                    }
+                    if (entryInput.style) {
+                        entryInput.style.background = '#1a1a2e';
+                        entryInput.style.transition = 'background 0.3s';
+                    }
+                    
+                    setTimeout(() => {
+                        if (indicator) indicator.style.display = 'none';
+                        if (entryInput.style) entryInput.style.background = '';
+                    }, 2000);
+                    
+                    console.log(`✅ Live price updated: ${symbol} ${oldValue.toFixed(4)} → ${data.price.toFixed(4)}`);
+                }
+            } else {
+                console.warn(`⚠️ Invalid price received for ${symbol}: ${data.price}`);
             }
         }).catch(err => {
-            console.error('Live price fetch failed:', err);
-            resetBtn.textContent = '❌';
-            setTimeout(() => resetBtn.textContent = '🔄 Live', 1000);
+            console.error(`❌ Live price fetch failed for ${symbol}:`, err);
+            if (resetBtn) {
+                resetBtn.textContent = '❌';
+                setTimeout(() => resetBtn.textContent = '🔄 Live', 1000);
+            }
         });
     }
 
@@ -1275,16 +1302,27 @@
     setInterval(updateTradeLimits, 10000);  // Limits 10s (unchanged - local data)
     setInterval(updateLiveTradeLog, 2000);  // Live log 2s (unchanged - local data)
     
-    // Initial live sync on page load
-    setTimeout(updateLivePrice, 100);
+    // ✅ FIXED: Ensure updateLivePrice runs AFTER DOM is fully loaded with correct symbol
+    document.addEventListener('DOMContentLoaded', function() {
+        // Using setTimeout to ensure all DOM elements are bound before fetching price
+        setTimeout(() => {
+            const symbolSelect = document.querySelector('select[name="symbol"]');
+            if (symbolSelect && symbolSelect.value) {
+                console.log(`🔄 Initializing live price for selected symbol: ${symbolSelect.value}`);
+                updateLivePrice();
+            }
+        }, 150);
+    });
 
-
-    // Initial load
-    updateLivePrice();
-    updateLivePositions();
-    updateTradeHistory();
-    updateTradeLimits();
-    updateLiveTradeLog();
+    // Keep these but they now run AFTER DOMContentLoaded ensures symbol is ready
+    document.addEventListener('DOMContentLoaded', function() {
+        setTimeout(() => {
+            updateLivePositions();
+            updateTradeHistory();
+            updateTradeLimits();
+            updateLiveTradeLog();
+        }, 200);
+    });
     
     // Form validation
     document.addEventListener('DOMContentLoaded', function() {
@@ -1312,8 +1350,16 @@
 
     // ✅ PRESERVE FORM STATE when changing coins
     function changeSymbol(symbol) {
+        // ✅ DEFENSIVE: Ensure symbol is valid before redirecting
+        if (!symbol || symbol === '') {
+            console.warn('⚠️ Invalid symbol for change:', symbol);
+            return;
+        }
+        
+        console.log(`🔄 Switching to symbol: ${symbol}`);
+        
         // Redirect to index with symbol parameter to ensure fresh page load
-        // This ensures TradingView chart updates properly
+        // This ensures TradingView chart updates properly and all prices are fresh
         window.location.href = '/index?symbol=' + encodeURIComponent(symbol);
     }
 

@@ -994,6 +994,17 @@ def index():
     # FIXED: Get symbol from URL query params and form data, use first symbol as default
     default_first_symbol = symbols[0] if symbols and len(symbols) > 0 else "BTCUSDT"
     selected_symbol = request.args.get("symbol") or request.form.get("symbol") or default_first_symbol
+    
+    # ✅ DEFENSIVE: Validate selected_symbol exists in available symbols or fallback
+    if selected_symbol not in symbols and symbols:
+        print(f"⚠️ Selected symbol '{selected_symbol}' not in available symbols, using first symbol")
+        selected_symbol = symbols[0]
+    
+    selected_symbol = (selected_symbol or '').strip().upper()
+    if not selected_symbol:
+        selected_symbol = default_first_symbol
+    
+    print(f"✓ Index page loaded with symbol: {selected_symbol}")
     side = request.form.get("side", "LONG")
     order_type = request.form.get("order_type", "MARKET")
     margin_mode = request.form.get("margin_mode", "ISOLATED")
