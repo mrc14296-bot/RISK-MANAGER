@@ -415,9 +415,9 @@ def get_live_price(symbol, user_id=None):
     
     # ✅ DEFENSIVE: Strip whitespace and validate symbol format
     symbol = (symbol or '').strip().upper()
-    if not symbol or len(symbol) < 6:
-        print(f"⚠️ Invalid symbol format: '{symbol}' - using fallback")
-        symbol = 'BTCUSDT'
+    if not symbol or len(symbol) < 6 or not symbol.isalnum():
+        print(f"⚠️ Invalid symbol format: '{symbol}' - refusing cross-symbol fallback")
+        return 0.0
     
     cache_key = f"{symbol}_{user_id or 'public'}"
     
@@ -447,10 +447,13 @@ def get_live_price(symbol, user_id=None):
         f"https://fapi.binance.com/fapi/v1/ticker/price?symbol={symbol}",
         f"https://fapi.binance.com/fapi/v2/ticker/price?symbol={symbol}"
     ]
+    proxies = {}
+    if hasattr(config, 'PROXY_URL') and config.PROXY_URL:
+        proxies = {'https': config.PROXY_URL, 'http': config.PROXY_URL}
     
     for url in public_endpoints:
         try:
-            resp = requests.get(url, timeout=2)
+            resp = requests.get(url, timeout=2, proxies=proxies)
             if resp.status_code == 200:
                 data = resp.json()
                 price_key = data.get('price') if isinstance(data, dict) else None
@@ -465,13 +468,13 @@ def get_live_price(symbol, user_id=None):
             print(f"⚠️ Public API fetch failed ({url}): {e}")
             continue
     
-    # Fallback prices as last resort
-    fallback_prices = {'BTCUSDT': 93450.0, 'ETHUSDT': 3500.0, 'BNBUSDT': 600.0, 'SOLUSDT': 180.0}
-    price = fallback_prices.get(symbol, 1.0)
-    _price_cache[cache_key] = price
-    _price_cache_time[cache_key] = current_time
-    print(f"⚠️ Using FALLBACK price for {symbol}: ${price}")
-    return price
+    if cache_key in _price_cache:
+        stale_price = _price_cache[cache_key]
+        print(f"⚠️ Using STALE cached price for {symbol}: ${stale_price}")
+        return stale_price
+
+    print(f"⚠️ No live price available for {symbol}; returning 0")
+    return 0.0
 
 def get_symbol_filters(symbol, user_id=None):
     DEFAULT_FILTERS = [

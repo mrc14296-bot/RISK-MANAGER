@@ -1129,12 +1129,11 @@
 
     function updateLivePrice() {
         const symbolSelect = document.querySelector('select[name="symbol"]');
-        const symbol = symbolSelect ? symbolSelect.value : 'BTCUSDT';
+        const symbol = symbolSelect ? (symbolSelect.value || '').trim().toUpperCase() : '';
         
-        // ✅ DEFENSIVE: Ensure symbol is not empty or default fallback
+        // ✅ DEFENSIVE: Never switch to another coin automatically
         if (!symbol || symbol === '') {
-            console.warn('⚠️ No symbol found in dropdown, using BTCUSDT fallback');
-            document.querySelector('select[name="symbol"]').value = 'BTCUSDT';
+            console.warn('⚠️ No symbol found in dropdown, skipping live price refresh');
             return;
         }
         
@@ -1149,14 +1148,23 @@
         
         console.log(`📡 Fetching live price for: ${symbol}`);
         
-        fetch(`/get_live_price/${symbol}`)
+        fetch(`/get_live_price/${encodeURIComponent(symbol)}`)
         .then(r => r.json())
         .then(data => {
             if (data.price && data.price > 0) {
+                const activeSymbol = symbolSelect ? (symbolSelect.value || '').trim().toUpperCase() : '';
+                if (activeSymbol !== symbol) {
+                    console.log(`ℹ️ Ignoring stale price response for ${symbol}; active symbol is ${activeSymbol}`);
+                    return;
+                }
+
                 const oldValue = parseFloat(entryInput.value) || 0;
+                const lastPriceSymbol = (entryInput.dataset.liveSymbol || '').trim().toUpperCase();
+                const symbolChanged = lastPriceSymbol !== symbol;
                 // ✅ Only update if price is different (avoid unnecessary updates)
-                if (Math.abs(oldValue - data.price) / Math.max(oldValue, data.price) > 0.01 || oldValue === 0) {
+                if (symbolChanged || Math.abs(oldValue - data.price) / Math.max(oldValue, data.price) > 0.01 || oldValue === 0) {
                     entryInput.value = data.price;
+                    entryInput.dataset.liveSymbol = symbol;
                     
                     // Visual feedback
                     if (indicator) {
@@ -1173,6 +1181,8 @@
                     }, 2000);
                     
                     console.log(`✅ Live price updated: ${symbol} ${oldValue.toFixed(4)} → ${data.price.toFixed(4)}`);
+                } else {
+                    entryInput.dataset.liveSymbol = symbol;
                 }
             } else {
                 console.warn(`⚠️ Invalid price received for ${symbol}: ${data.price}`);
@@ -1307,6 +1317,10 @@
         // Using setTimeout to ensure all DOM elements are bound before fetching price
         setTimeout(() => {
             const symbolSelect = document.querySelector('select[name="symbol"]');
+            const entryInput = document.getElementById('entry_input');
+            if (symbolSelect && entryInput) {
+                entryInput.dataset.liveSymbol = (symbolSelect.value || '').trim().toUpperCase();
+            }
             if (symbolSelect && symbolSelect.value) {
                 console.log(`🔄 Initializing live price for selected symbol: ${symbolSelect.value}`);
                 updateLivePrice();
