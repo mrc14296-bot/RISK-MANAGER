@@ -1528,23 +1528,24 @@
         
         console.log(`🔄 [fetchLivePrice] Opening WebSocket for: ${targetSymbol}`);
 
-        // Connect directly to Binance WebSocket for literal real-time stream
+        // Connect to Binance Futures WebSocket so every perpetual futures symbol uses the same market as the backend
         const wsSymbol = targetSymbol.toLowerCase();
-        const wsUrl = `wss://stream.binance.com:9443/ws/${wsSymbol}@ticker`;
+        const wsUrl = `wss://fstream.binance.com/ws/${wsSymbol}@ticker`;
         console.log(`📡 [fetchLivePrice] WebSocket URL: ${wsUrl}`);
         
         let wsTimeout = null;
-        let wsConnected = false;
+        let wsOpened = false;
+        let wsReceivedData = false;
         
         priceWs = new WebSocket(wsUrl);
 
         priceWs.onopen = () => {
-            wsConnected = true;
+            wsOpened = true;
             console.log(`✅ [fetchLivePrice] WebSocket connected for ${targetSymbol}`);
-            // Set a timeout - if we don't get data within 3 seconds, fall back to REST API
+            // If the socket opens but no ticker arrives, fall back to REST instead of hanging forever.
             wsTimeout = setTimeout(() => {
-                if (!wsConnected) {
-                    console.warn(`⏱️ [fetchLivePrice] WebSocket timeout for ${targetSymbol} - trying REST API`);
+                if (!wsReceivedData) {
+                    console.warn(`⏱️ [fetchLivePrice] No futures ticker received for ${targetSymbol} - trying REST API`);
                     priceWs.close();
                     fetchLivePriceViaREST(targetSymbol, entryInput, indicator);
                 }
@@ -1553,11 +1554,16 @@
 
         priceWs.onmessage = (event) => {
             try {
-                wsConnected = true;
+                wsReceivedData = true;
                 if (wsTimeout) clearTimeout(wsTimeout);
                 
                 const data = JSON.parse(event.data);
-                const currentPrice = parseFloat(data.c).toFixed(8);
+                const parsedPrice = parseFloat(data.c);
+                if (!Number.isFinite(parsedPrice) || parsedPrice <= 0) {
+                    console.warn(`⚠️ [fetchLivePrice] Invalid futures ticker payload for ${targetSymbol}:`, data);
+                    return;
+                }
+                const currentPrice = parsedPrice.toFixed(8);
                 
                 console.log(`📊 [fetchLivePrice] Got price for ${targetSymbol}: ${currentPrice}`);
                 
@@ -1593,7 +1599,7 @@
         };
 
         priceWs.onerror = (err) => {
-            wsConnected = false;
+            wsOpened = false;
             if (wsTimeout) clearTimeout(wsTimeout);
             console.error(`❌ [fetchLivePrice] WebSocket error for ${targetSymbol}:`, err);
             
@@ -1603,9 +1609,15 @@
         };
 
         priceWs.onclose = () => {
-            wsConnected = false;
+            const shouldFallback = wsOpened && !wsReceivedData && entryInput.dataset.liveSymbol === targetSymbol.toUpperCase();
+            wsOpened = false;
             if (wsTimeout) clearTimeout(wsTimeout);
             console.log(`🔄 [fetchLivePrice] WebSocket closed for ${targetSymbol}`);
+
+            if (shouldFallback) {
+                console.log(`🔁 [fetchLivePrice] Falling back to REST after empty futures stream for ${targetSymbol}`);
+                fetchLivePriceViaREST(targetSymbol, entryInput, indicator);
+            }
         };
     }
     
