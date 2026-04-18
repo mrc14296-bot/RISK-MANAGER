@@ -579,44 +579,66 @@
             const isMobileChart = window.matchMedia('(max-width: 900px)').matches;
             const chartContainer = document.getElementById('tv_chart');
             
+            if (!chartContainer) {
+              console.error('❌ Chart container not found!');
+              return;
+            }
+            
+            // ✅ FIX: Clear the container completely before reinitializing
+            chartContainer.innerHTML = '';
+            
             // Clear previous widget if it exists
             if (tvWidget) {
               try {
                 tvWidget.remove();
+                tvWidget = null;
               } catch (e) {
                 console.log('Previous chart cleanup skipped');
               }
             }
             
-            tvWidget = new TradingView.widget({
-              "autosize": true,
-              "symbol": "BINANCE:" + selectedSymbol,
-              "interval": "5",
-              "timezone": "Etc/UTC",
-              "theme": "dark",
-              "style": "1",
-              "locale": "en",
-              "toolbar_bg": "#f1f3f6",
-              "enable_publishing": false,
-              "hide_top_toolbar": isMobileChart,
-              "save_image": false,
-              "container_id": "tv_chart"
-            });
+            // ✅ FIX: Add small delay to ensure DOM is ready
+            setTimeout(() => {
+              try {
+                console.log(`📊 Initializing TradingView chart for: ${selectedSymbol}`);
+                
+                tvWidget = new TradingView.widget({
+                  "autosize": true,
+                  "symbol": "BINANCE:" + selectedSymbol,
+                  "interval": "5",
+                  "timezone": "Etc/UTC",
+                  "theme": "dark",
+                  "style": "1",
+                  "locale": "en",
+                  "toolbar_bg": "#f1f3f6",
+                  "enable_publishing": false,
+                  "hide_top_toolbar": isMobileChart,
+                  "save_image": false,
+                  "container_id": "tv_chart",
+                  "allow_symbol_change": false  // ✅ FIX: Prevent TradingView from changing symbol internally
+                });
+                
+                console.log(`✅ TradingView chart initialized for: ${selectedSymbol}`);
+              } catch (e) {
+                console.error('❌ Error initializing TradingView chart:', e);
+              }
+            }, 100);
           }
           
-          // Initialize chart on page load
+          // ✅ FIX: Initialize chart on page load
           if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initializeTradingViewChart);
+            document.addEventListener('DOMContentLoaded', () => {
+              setTimeout(initializeTradingViewChart, 500);  // ✅ Add delay for full page load
+            });
           } else {
-            initializeTradingViewChart();
+            setTimeout(initializeTradingViewChart, 500);
           }
           
-          // Re-initialize chart when form is submitted with new symbol
-          window.addEventListener('beforeunload', function() {
-            const newSymbol = document.querySelector('select[name="symbol"]')?.value;
-            if (newSymbol && newSymbol !== selectedSymbol) {
-              // Redirect with symbol parameter to ensure fresh chart load
-              window.location.href = '/index?symbol=' + encodeURIComponent(newSymbol);
+          // ✅ FIX: Also reinitialize on visibility change (when tab comes to focus)
+          document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+              console.log('📊 Page visible again, reinitializing chart...');
+              initializeTradingViewChart();
             }
           });
         </script>
@@ -766,11 +788,21 @@
             });
     }
     
-    // Update embedded coin details when symbol changes
+    // ✅ FIXED: Update embedded coin details AND reload chart when symbol changes
     document.addEventListener('DOMContentLoaded', () => {
         const symbolSelect = document.querySelector('select[name="symbol"]');
         if (symbolSelect) {
-            symbolSelect.addEventListener('change', updateEmbeddedCoinDetails);
+            // ✅ FIX: When symbol changes, reload the entire page with new symbol
+            // This ensures: 1) Chart reloads, 2) Prices refresh, 3) All data updates
+            symbolSelect.addEventListener('change', function() {
+                const newSymbol = this.value;
+                console.log(`✅ Symbol dropdown changed to: ${newSymbol}`);
+                
+                // Call changeSymbol which handles everything: chart cleanup, page reload
+                setTimeout(() => {
+                    changeSymbol(newSymbol);
+                }, 100);
+            });
         }
         updateEmbeddedCoinDetails();
         setInterval(updateEmbeddedCoinDetails, 5000); // Refresh every 5 seconds
@@ -1362,7 +1394,7 @@
         setTimeout(validateFormInputs, 500);
     });
 
-    // ✅ PRESERVE FORM STATE when changing coins
+    // ✅ FIXED: Properly change symbol and refresh page with new symbol
     function changeSymbol(symbol) {
         // ✅ DEFENSIVE: Ensure symbol is valid before redirecting
         if (!symbol || symbol === '') {
@@ -1372,9 +1404,20 @@
         
         console.log(`🔄 Switching to symbol: ${symbol}`);
         
-        // Redirect to index with symbol parameter to ensure fresh page load
-        // This ensures TradingView chart updates properly and all prices are fresh
-        window.location.href = '/index?symbol=' + encodeURIComponent(symbol);
+        // ✅ FIX: Clear TradingView widget before navigation
+        if (typeof tvWidget !== 'undefined' && tvWidget) {
+            try {
+                tvWidget.remove();
+                tvWidget = null;
+                console.log('✅ Cleared TradingView widget');
+            } catch (e) {
+                console.log('Widget cleanup attempt made');
+            }
+        }
+        
+        // ✅ FIX: Force full page reload with new symbol (busting cache with timestamp)
+        const timestamp = new Date().getTime();
+        window.location.href = '/index?symbol=' + encodeURIComponent(symbol) + '&t=' + timestamp;
     }
 
     // ✅ SHOW COIN DETAILS IN MODAL (WITH REAL-TIME DATA)
