@@ -682,8 +682,19 @@ def live_price_api(symbol):
 @login_required
 @subscription_required
 def get_open_positions_api():
-    positions = logic.get_open_positions(current_user.id)
-    return jsonify({"positions": positions})
+    """
+    ✅ FIXED: Now supports filtering by symbol via ?symbol=BTCUSDT query parameter
+    This allows dynamic symbol switching to fetch relevant positions only
+    """
+    symbol_filter = request.args.get('symbol', '').strip().upper()
+    all_positions = logic.get_open_positions(current_user.id)
+    
+    # Filter by symbol if provided
+    if symbol_filter:
+        filtered_positions = [p for p in all_positions if isinstance(p, dict) and p.get('symbol') == symbol_filter]
+        return jsonify({"positions": filtered_positions, "symbol": symbol_filter, "total": len(filtered_positions)})
+    
+    return jsonify({"positions": all_positions})
 
 @app.route("/api/liquidation_prices")
 @login_required
@@ -715,6 +726,68 @@ def get_liquidation_prices_api():
 def get_trade_history_api():
     trades = logic.get_trade_history(current_user.id)
     return jsonify({"trades": trades})
+
+@app.route("/api/calculate-sizing")
+@login_required
+@subscription_required
+def calculate_sizing_api():
+    """
+    ✅ NEW: Calculate position sizing for dynamic symbol changes
+    Allows real-time sizing updates when user switches symbols
+    """
+    try:
+        symbol = (request.args.get('symbol') or '').strip().upper()
+        entry = float(request.args.get('entry') or 0)
+        
+        if not symbol or len(symbol) < 6:
+            return jsonify({"success": False, "error": "Invalid symbol"}), 400
+        
+        if entry <= 0:
+            return jsonify({"success": False, "error": "Invalid entry price"}), 400
+        
+        # Get balance info
+        balance_data = logic.get_live_balance(current_user.id)
+        balance = 0.0
+        margin_used = 0.0
+        
+        if balance_data and isinstance(balance_data, tuple):
+            inner_tuple = balance_data[0]
+            if isinstance(inner_tuple, tuple) and len(inner_tuple) >= 2:
+                balance = float(inner_tuple[0] or 0.0)
+                margin_used = float(inner_tuple[1] or 0.0)
+        
+        unutilized = max(balance - margin_used, 0.0)
+        
+        # Get default SL type and value
+        sl_type = request.args.get('sl_type', 'SL % Movement')
+        sl_value = float(request.args.get('sl_value', 1.5))
+        side = request.args.get('side', 'LONG')
+        
+        # Calculate sizing
+        sizing = logic.calculate_position_sizing(
+            unutilized, 
+            entry, 
+            sl_type, 
+            sl_value, 
+            side,
+            user_id=current_user.id,
+            symbol=symbol
+        )
+        
+        return jsonify({
+            "success": True,
+            "symbol": symbol,
+            "entry": entry,
+            "suggested_units": sizing.get('suggested_units', 0),
+            "suggested_leverage": sizing.get('suggested_leverage', 1),
+            "margin_ratio": sizing.get('margin_ratio', 0),
+            "liquidation_price": sizing.get('liquidation_price', 0)
+        })
+    except Exception as e:
+        print(f"❌ Sizing calculation error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route("/get_user_trade_positions")
 @login_required
