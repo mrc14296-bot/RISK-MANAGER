@@ -764,7 +764,8 @@ def get_liquidation_prices_api():
 @login_required
 @subscription_required
 def get_trade_history_api():
-    trades = logic.get_trade_history(current_user.id)
+    fresh = request.args.get('fresh', '').strip() in {'1', 'true', 'yes'}
+    trades = logic.get_trade_history(current_user.id, force_refresh=fresh)
     symbol_filter = request.args.get('symbol', '').strip().upper()
     if symbol_filter:
         trades = [t for t in trades if isinstance(t, dict) and t.get('symbol') == symbol_filter]

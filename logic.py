@@ -1290,13 +1290,13 @@ def get_live_pnl(symbol, user_id=None):
     except Exception as e:
         return {"success": False, "error": str(e)}
 
-def get_trade_history(user_id=None):
+def get_trade_history(user_id=None, force_refresh=False):
     global _trade_history_cache, _trade_history_cache_time
     current_time = time.time()
     cache_key = f"trade_history_{user_id or 'public'}"
     
     # Return cached trade history if less than 60 seconds old
-    if cache_key in _trade_history_cache and (current_time - _trade_history_cache_time.get(cache_key, 0)) < 60:
+    if (not force_refresh) and cache_key in _trade_history_cache and (current_time - _trade_history_cache_time.get(cache_key, 0)) < 60:
         return _trade_history_cache[cache_key]
     
     try:
