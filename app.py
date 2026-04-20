@@ -1250,8 +1250,22 @@ def index():
         wallet_debug=wallet_debug
     )
 
+def ensure_sqlite_trade_positions_columns():
+    """SQLite: add columns introduced after first deploy (create_all does not alter)."""
+    try:
+        from sqlalchemy import text
+        with db.engine.begin() as conn:
+            r = conn.execute(text("PRAGMA table_info(trade_positions)"))
+            cols = {row[1] for row in r}
+            if "opening_order_id" not in cols:
+                conn.execute(text("ALTER TABLE trade_positions ADD COLUMN opening_order_id VARCHAR(64)"))
+    except Exception as e:
+        print(f"SQLite schema patch (trade_positions): {e}")
+
+
 with app.app_context():
     db.create_all()
+    ensure_sqlite_trade_positions_columns()
 
 # ============================================
 # ERROR HANDLERS - Add these after app creation

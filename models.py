@@ -123,6 +123,8 @@ class TradePosition(db.Model):
     tp1_price = db.Column(db.Float, nullable=True)
     tp1_qty_pct = db.Column(db.Float, default=0.0)
     tp2_price = db.Column(db.Float, nullable=True)
+    # Binance futures orderId from the opening position order — links account trades to TP/SL
+    opening_order_id = db.Column(db.String(64), nullable=True)
     current_sl = db.Column(db.Float, nullable=False)  # Live trailed SL
     unrealized_pnl = db.Column(db.Float, default=0.0)
     status = db.Column(db.String(20), default='open')  # open/closed/partial

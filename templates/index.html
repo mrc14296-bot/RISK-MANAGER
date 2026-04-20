@@ -1,6 +1,7 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
     <title>MindRiskControl</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="../static/style.css">
@@ -257,6 +258,34 @@
             font-size: 8px;
             font-family: monospace;
         }
+        /* Native progress avoids template syntax inside style="" (lint/CSS parse) */
+        .daily-limit-progress {
+            width: 100%;
+            height: 6px;
+            vertical-align: middle;
+            margin: 1px 0;
+            border: none;
+            border-radius: 2px;
+            background: #1a3a45;
+        }
+        .daily-limit-progress::-webkit-progress-bar {
+            background: #1a3a45;
+            border-radius: 2px;
+        }
+        .daily-limit-progress::-webkit-progress-value {
+            background: linear-gradient(90deg, #0ca7d4, #00d4ff);
+            border-radius: 2px;
+        }
+        .daily-limit-progress.limit-over::-webkit-progress-value {
+            background: #cc0000;
+        }
+        .daily-limit-progress::-moz-progress-bar {
+            background: linear-gradient(90deg, #0ca7d4, #00d4ff);
+            border-radius: 2px;
+        }
+        .daily-limit-progress.limit-over::-moz-progress-bar {
+            background: #cc0000;
+        }
         @media (max-height: 920px) {
             .chart-section {
                 flex-basis: auto;
@@ -353,9 +382,9 @@
 
             <div class="row">
                 <div class="col">
-                    <label style="font-size: 10px; margin-bottom: 1px;">Capital (1% Risk)</label>
+                    <label for="wallet_unutilized_display" style="font-size: 10px; margin-bottom: 1px;">Capital (1% Risk)</label>
                     <div id="wallet-display" style="position: relative;">
-<input value="{{ wallet_debug.unutilized | default(0) | round(2) }}" disabled style="color: #7aff00; width: 100%; font-size: 10px; height: 20px;">
+<input id="wallet_unutilized_display" type="text" readonly value="{{ wallet_debug.unutilized | default(0) | round(2) }}" title="Unutilized margin USDT" aria-label="Unutilized capital for trading in USDT" style="color: #7aff00; width: 100%; font-size: 10px; height: 20px;">
                         <div id="wallet-status" style="position: absolute; right: 6px; top: 50%; transform: translateY(-50%); font-size: 8px; padding: 1px 4px; border-radius: 6px;">
                             {% if wallet_debug.needs_connection %}
                                 <span style="background: #ff4444; color: white;">⚠️ Connect</span>
@@ -383,8 +412,8 @@
 
             <div class="risk-control">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; gap: 6px;">
-                    <label style="margin-bottom: 0; font-size: 10px; white-space: nowrap;">🔒 Risk %</label>
-                    <input type="range" id="risk_slider" min="0.5" max="2" step="0.1" value="1" onchange="updateRiskSizing()" style="width: 60px; flex: 1;">
+                    <label for="risk_slider" style="margin-bottom: 0; font-size: 10px; white-space: nowrap;">🔒 Risk %</label>
+                    <input type="range" id="risk_slider" name="risk_slider" min="0.5" max="2" step="0.1" value="1" onchange="updateRiskSizing()" aria-label="Risk percent per trade" title="Risk percent per trade" style="width: 60px; flex: 1;">
                     <span id="risk_pct_display" style="font-size: 10px; white-space: nowrap;">1.0%</span>
                 </div>
                 <div id="risk-preview" class="risk-preview" style="display: none; font-size: 9px; line-height: 1.2;">
@@ -396,28 +425,28 @@
             <div class="status" style="padding: 4px; margin: 4px 0;">
                 <strong style="font-size: 9px;">📊 Daily Limits:</strong>
                 <span style="font-size: 8px;">Total: <span id="total_trades_display">{{today_stats.total_trades}}/{{today_stats.max_trades}}</span> | <span id="symbol_trades_label">{{selected_symbol}}</span>: <span id="symbol_trades_display">{{ today_stats.symbol_trades.get(selected_symbol, 0) if today_stats.symbol_trades else 0 }}/{{today_stats.max_per_symbol}}</span></span>
-                <div class="limit-bar" style="margin: 1px 0; height: 4px;"><div class="limit-{{ 'green' if today_stats.total_trades < today_stats.max_trades else 'red' }}" style="width: {{ (today_stats.total_trades / today_stats.max_trades * 100) }}%; height: 100%;"></div></div>
+                <progress id="daily_limit_progress" class="daily-limit-progress{% if today_stats.total_trades >= today_stats.max_trades %} limit-over{% endif %}" value="{{ today_stats.total_trades }}" max="{{ today_stats.max_trades or 1 }}" aria-label="Daily total trades used versus limit"></progress>
             </div>
 
             <div class="row">
                 <div class="col" style="flex: 1.2;">
-                    <label>Symbol</label>
-                    <select name="symbol" onchange="changeSymbolDynamic(event)" id="symbol_select" style="font-size: 10px;">
+                    <label for="symbol_select">Symbol</label>
+                    <select name="symbol" onchange="changeSymbolDynamic(event)" id="symbol_select" aria-label="Trading symbol" style="font-size: 10px;">
         {% for sym in symbols %}
         <option value="{{sym}}" {{ 'selected' if sym == selected_symbol }}>{{sym}}</option>
         {% endfor %}
     </select>
                 </div>
                 <div class="col">
-                    <label>Order Type</label>
-                    <select name="order_type" id="order_type_select" style="font-size: 10px;">
+                    <label for="order_type_select">Order Type</label>
+                    <select name="order_type" id="order_type_select" aria-label="Order type market or limit" style="font-size: 10px;">
                         <option value="MARKET" {{ 'selected' if order_type == 'MARKET' }}>MARKET</option>
                         <option value="LIMIT" {{ 'selected' if order_type == 'LIMIT' }}>LIMIT</option>
                     </select>
                 </div>
                 <div class="col" style="flex: 1.3;">
-                    <label style="font-size: 9px;">Margin Mode</label>
-                    <select name="margin_mode" id="margin_mode_select" style="font-size: 10px;">
+                    <label for="margin_mode_select" style="font-size: 9px;">Margin Mode</label>
+                    <select name="margin_mode" id="margin_mode_select" aria-label="Margin mode isolated or cross" style="font-size: 10px;">
                         <option value="ISOLATED" {{ 'selected' if margin_mode == 'ISOLATED' }}>ISOLATED</option>
                         <option value="CROSS" {{ 'selected' if margin_mode == 'CROSS' }}>CROSS</option>
                     </select>
@@ -437,45 +466,45 @@
 
             <div class="row">
                 <div class="col" style="flex: 1.2;">
-                    <label style="font-size: 10px;">Entry Price</label>
+                    <label for="entry_input" style="font-size: 10px;">Entry Price</label>
                     <div style="display: flex; align-items: center; gap: 3px;">
-                        <input type="number" name="entry" id="entry_input" value="{{default_entry}}" step="any" style="flex: 1; font-size: 10px;">
+                        <input type="number" name="entry" id="entry_input" value="{{default_entry}}" step="any" title="Entry price" aria-label="Entry price" style="flex: 1; font-size: 10px;">
                         <button type="button" id="reset-live-btn" onclick="updateLivePrice()" style="background: #0d6efd; color: white; border: none; padding: 3px 6px; border-radius: 3px; cursor: pointer; font-size: 8px; white-space: nowrap;">Live</button>
                     </div>
                 </div>
                 <div class="col" style="flex: 0.8;">
-                    <label style="font-size: 10px;">TP1 Type</label>
-                    <select name="tp1_mode" onchange="this.form.submit();" style="font-size: 9px;">
+                    <label for="tp1_mode_select" style="font-size: 10px;">TP1 Type</label>
+                    <select name="tp1_mode" id="tp1_mode_select" onchange="this.form.submit();" aria-label="Take profit 1 price or percent mode" style="font-size: 9px;">
                         <option value="TP1 Price" {{ 'selected' if default_tp1_mode == 'TP1 Price' }}>Price</option>
                         <option value="TP1 % Movement" {{ 'selected' if default_tp1_mode == 'TP1 % Movement' }}>% Move</option>
                     </select>
                 </div>
                 <div class="col">
-                    <label style="font-size: 10px;">TP1 Value</label>
-                    <input type="number" name="tp1" value="{{default_tp1_value}}" step="any" style="font-size: 10px;">
+                    <label for="tp1_input" style="font-size: 10px;">TP1 Value</label>
+                    <input type="number" name="tp1" id="tp1_input" value="{{default_tp1_value}}" step="any" title="Take profit 1 value" aria-label="Take profit 1 value" style="font-size: 10px;">
                 </div>
                 <div class="col" style="flex: 0.7;">
-                    <label style="font-size: 10px;">TP1 %</label>
-                    <input type="number" name="tp1_pct" value="{{tp1_pct}}" style="font-size: 10px;">
+                    <label for="tp1_pct_input" style="font-size: 10px;">TP1 %</label>
+                    <input type="number" name="tp1_pct" id="tp1_pct_input" value="{{tp1_pct}}" title="Percent of position for TP1" aria-label="Percent of position for TP1" style="font-size: 10px;">
                 </div>
             </div>
 
             <div class="row">
                 <div class="col" style="flex: 1;">
-                    <label style="font-size: 10px;">TP2 Price</label>
-                    <input type="number" name="tp2" value="{{tp2}}" step="any" style="font-size: 10px;">
+                    <label for="tp2_input" style="font-size: 10px;">TP2 Price</label>
+                    <input type="number" name="tp2" id="tp2_input" value="{{tp2}}" step="any" title="Take profit 2 price" aria-label="Take profit 2 price" style="font-size: 10px;">
                 </div>
                 <div class="col" style="flex: 0.8;">
-                    <label style="font-size: 10px;">SL Method</label>
-                    <select name="sl_type" onchange="this.form.submit();" style="font-size: 9px;">
+                    <label for="sl_type_select" style="font-size: 10px;">SL Method</label>
+                    <select name="sl_type" id="sl_type_select" onchange="this.form.submit();" aria-label="Stop loss method points or percent" style="font-size: 9px;">
                         <option value="SL Points" {{ 'selected' if default_sl_type == 'SL Points' }}>Points</option>
                         <option value="SL % Movement" {{ 'selected' if default_sl_type == 'SL % Movement' }}>% Move</option>
                     </select>
                 </div>
                 <div class="col" style="flex: 0.9;">
-                    <label style="font-size: 9px;">SL Value⚠️</label>
-                    <input type="number" name="sl_value" value="{{default_sl_value}}" step="any" 
-                           onchange="this.form.submit();" required style="font-size: 10px;">
+                    <label for="sl_value_input" style="font-size: 9px;">SL Value⚠️</label>
+                    <input type="number" name="sl_value" id="sl_value_input" value="{{default_sl_value}}" step="any" 
+                           onchange="this.form.submit();" required title="Stop loss value" aria-label="Stop loss value" style="font-size: 10px;">
                 </div>
             </div>
 
@@ -523,7 +552,7 @@
                 <div class="dashboard-card positions-card" style="padding: 5px; display: flex; flex-direction: column; min-height: 0; border: 1px solid #0ca7d4; background: #0b0f12; border-radius: 3px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin: 0 0 2px 0; border-bottom: 1px solid #0ca7d4; padding: 0 0 2px 0;">
                         <h3 style="color: #00d4ff; margin: 0; font-size: 9px; font-weight: bold;" id="position_header">📍 POS (0)</h3>
-                        <button onclick="closeAllPositions()" style="background: #cc0000; color: #fff; border: none; padding: 1px 5px; border-radius: 2px; cursor: pointer; font-size: 7px; font-weight: bold; transition: all 0.2s;">Close</button>
+                        <button type="button" onclick="closeAllPositions()" aria-label="Close all open positions" style="background: #cc0000; color: #fff; border: none; padding: 1px 5px; border-radius: 2px; cursor: pointer; font-size: 7px; font-weight: bold; transition: all 0.2s;">Close</button>
                     </div>
 
                     <div id="live_positions" class="positions-scroll" style="max-height: 135px; overflow-y: auto; flex: 1; min-height: 0; font-size: 8px; margin: 0; padding: 0 2px;">
@@ -1083,17 +1112,25 @@
         const side = document.getElementById('side_hidden').value;
         const orderType = document.getElementById('order_type_select').value;
         const entry = parseFloat(document.getElementById('entry_input').value) || 0;
+        const slType = document.querySelector('select[name="sl_type"]') ? document.querySelector('select[name="sl_type"]').value : 'SL % Movement';
         const slValue = parseFloat(document.querySelector('input[name="sl_value"]').value) || 0;
-        const tp1 = parseFloat(document.querySelector('input[name="tp1"]').value) || 0;
+        const tp1Mode = document.querySelector('select[name="tp1_mode"]') ? document.querySelector('select[name="tp1_mode"]').value : 'TP1 Price';
+        const tp1Raw = parseFloat(document.querySelector('input[name="tp1"]').value) || 0;
         const tp2 = parseFloat(document.querySelector('input[name="tp2"]').value) || 0;
+        let tp1 = tp1Raw;
+        if (tp1Mode === 'TP1 % Movement' && tp1Raw > 0 && entry > 0) {
+            tp1 = side === 'LONG' ? entry * (1 + tp1Raw / 100) : entry * (1 - tp1Raw / 100);
+        }
         
         // Validate SL
         if (slValue <= 0) {
             warnings.push('🛡️ Stop Loss is mandatory and must be greater than 0');
-        } else if (side === 'LONG' && slValue >= entry) {
-            warnings.push('🛡️ For LONG trades, SL must be below entry price');
-        } else if (side === 'SHORT' && slValue <= entry) {
-            warnings.push('🛡️ For SHORT trades, SL must be above entry price');
+        } else if (slType === 'SL Points' && entry > 0) {
+            if (side === 'LONG' && slValue >= entry) {
+                warnings.push('🛡️ For LONG trades, SL price must be below entry');
+            } else if (side === 'SHORT' && slValue <= entry) {
+                warnings.push('🛡️ For SHORT trades, SL price must be above entry');
+            }
         }
         
         // Validate entry for LIMIT orders
@@ -1101,8 +1138,8 @@
             warnings.push('💰 LIMIT orders require a valid entry price');
         }
         
-        // Validate TP levels
-        if (tp1 > 0) {
+        // Validate TP levels (tp1 resolved to price when mode is % movement)
+        if (tp1 > 0 && entry > 0) {
             if (side === 'LONG' && tp1 <= entry) {
                 warnings.push('🎯 TP1 must be above entry price for LONG trades');
             } else if (side === 'SHORT' && tp1 >= entry) {
@@ -1152,7 +1189,8 @@
         const entry = document.getElementById('entry_input').value;
         const sl = document.querySelector('input[name="sl_value"]').value;
         const slType = document.querySelector('select[name="sl_type"]').value;
-        const tp1 = document.querySelector('input[name="tp1"]').value;
+        const tp1Mode = document.querySelector('select[name="tp1_mode"]') ? document.querySelector('select[name="tp1_mode"]').value : 'TP1 Price';
+        const tp1Raw = document.querySelector('input[name="tp1"]').value;
         const tp2 = document.querySelector('input[name="tp2"]').value;
         const qty = document.querySelector('input[name="user_units"]').value || 'Auto';
         const lev = document.querySelector('input[name="user_lev"]').value || 'Auto';
@@ -1167,15 +1205,27 @@
         message += `📊 ${symbol} ${side}\n`;
         message += `💰 Entry: $${parseFloat(entry).toFixed(4)}\n`;
         
+        const en = parseFloat(entry) || 0;
+        const slNum = parseFloat(sl) || 0;
         // Show SL with correct unit based on SL type
         if (slType === "SL % Movement") {
-            message += `🛡️ SL: ${parseFloat(sl).toFixed(2)}% (${(parseFloat(entry) * (1 - parseFloat(sl)/100)).toFixed(4)} for LONG)\n`;
+            const slLong = en * (1 - slNum / 100);
+            const slShort = en * (1 + slNum / 100);
+            message += `🛡️ SL: ${slNum.toFixed(2)}% (≈$${slLong.toFixed(4)} LONG / ≈$${slShort.toFixed(4)} SHORT)\n`;
         } else {
-            message += `🛡️ SL: $${parseFloat(sl).toFixed(4)}\n`;
+            message += `🛡️ SL: $${slNum.toFixed(4)}\n`;
         }
         
-        if (tp1 && tp1 > 0) message += `🎯 TP1: $${parseFloat(tp1).toFixed(4)}\n`;
-        if (tp2 && tp2 > 0) message += `🎯 TP2: $${parseFloat(tp2).toFixed(4)}\n`;
+        if (tp1Raw && parseFloat(tp1Raw) > 0) {
+            let tp1Disp = parseFloat(tp1Raw);
+            if (tp1Mode === "TP1 % Movement" && en > 0) {
+                tp1Disp = side === 'LONG' ? en * (1 + tp1Disp / 100) : en * (1 - tp1Disp / 100);
+                message += `🎯 TP1: ${parseFloat(tp1Raw).toFixed(2)}% → $${tp1Disp.toFixed(4)}\n`;
+            } else {
+                message += `🎯 TP1: $${tp1Disp.toFixed(4)}\n`;
+            }
+        }
+        if (tp2 && parseFloat(tp2) > 0) message += `🎯 TP2: $${parseFloat(tp2).toFixed(4)}\n`;
         message += `📦 Qty: ${qty}\n`;
         message += `⚡ Leverage: ${lev}x\n\n`;
         message += `⚠️ This will execute a REAL order on Binance!\n`;

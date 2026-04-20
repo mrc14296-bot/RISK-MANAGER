@@ -1047,12 +1047,15 @@ def execute_trade_action(balance, symbol, side, entry, order_type, sl_type, sl_v
             }
 
         # MAIN ORDER - This MUST succeed
+        main_order_id = ""
         try:
             order_params = {"symbol": symbol, "side": e_side, "type": order_type, "quantity": qty}
             if order_type == "LIMIT":
                 order_params["price"] = round_price(symbol, entry, user_id)
                 order_params["timeInForce"] = "GTC"
-            client.futures_create_order(**order_params)
+            main_resp = client.futures_create_order(**order_params)
+            if isinstance(main_resp, dict) and main_resp.get("orderId") is not None:
+                main_order_id = str(main_resp.get("orderId"))
             time.sleep(0.5)
         except Exception as e:
             return {"success": False, "message": f"❌ Main order failed: {str(e)}"}
@@ -1090,6 +1093,7 @@ def execute_trade_action(balance, symbol, side, entry, order_type, sl_type, sl_v
             user_id=user_id, symbol=symbol, side=side,
             entry_price=entry, initial_qty=qty, sl_price=calculated_sl,
             tp1_price=tp1, tp1_qty_pct=tp1_pct, tp2_price=tp2,
+            opening_order_id=main_order_id or None,
             current_sl=calculated_sl
         )
         db.session.add(pos)
@@ -1100,7 +1104,13 @@ def execute_trade_action(balance, symbol, side, entry, order_type, sl_type, sl_v
         
         # Show if leverage was adjusted
         lev_note = f" (Adjusted from {original_lev}x)" if lev < original_lev else ""
-        log_trade_event("TRADE_OPEN", f"✅ 1% RISK {side} {symbol} | Entry:${entry:.4f} SL:${sl_p:.4f} Qty:{qty} Lev:{lev}x{lev_note}", user_id)
+        tp_parts = []
+        if tp1 and tp1 > 0:
+            tp_parts.append(f"TP1:${tp1:.4f}" + (f" [{tp1_pct:g}%]" if tp1_pct else ""))
+        if tp2 and tp2 > 0:
+            tp_parts.append(f"TP2:${tp2:.4f}")
+        tp_note = (" | " + " ".join(tp_parts)) if tp_parts else ""
+        log_trade_event("TRADE_OPEN", f"✅ 1% RISK {side} {symbol} | Entry:${entry:.4f} SL:${sl_p:.4f}{tp_note} Qty:{qty} Lev:{lev}x{lev_note}", user_id)
 
         # Cache invalidation
         if f"positions_{user_id}" in _positions_cache: del _positions_cache[f"positions_{user_id}"]
@@ -1323,7 +1333,19 @@ def attach_trade_levels(trades, user_id=None):
         if not positions:
             return trades
 
+        order_to_pos = {}
+        for pos in positions:
+            oid = getattr(pos, "opening_order_id", None) or None
+            if oid:
+                order_to_pos[str(oid)] = pos
+
         def match_position(trade):
+            oid = trade.get("order_id")
+            if oid is not None and str(oid) in order_to_pos:
+                p = order_to_pos[str(oid)]
+                if p.symbol == trade.get("symbol"):
+                    return p
+
             symbol = trade.get('symbol')
             trade_time_str = trade.get('time')
             if not symbol or not trade_time_str:
