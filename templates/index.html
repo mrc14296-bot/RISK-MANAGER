@@ -585,9 +585,13 @@
           let tvWidget = null;
           // ✅ FIXED: currentChartSymbol tracks the ACTIVE symbol for the chart
           let currentChartSymbol = "{{ selected_symbol or 'BTCUSDT' }}";
+          let lastValidSymbol = currentChartSymbol;
 
           function getTradingViewSymbol(symbol) {
             const cleanSymbol = (symbol || currentChartSymbol || 'BTCUSDT').trim().toUpperCase();
+            // TradingView futures formatting isn't consistent for all Binance listings.
+            // Heuristic: multiplier-style symbols (starting with a digit) often work without ".P".
+            if (/^[0-9]/.test(cleanSymbol)) return `BINANCE:${cleanSymbol}`;
             return `BINANCE:${cleanSymbol}.P`;
           }
           
@@ -1561,51 +1565,75 @@
         
         console.log(`🔄 [SYMBOL CHANGE] Switching to: ${cleanSymbol}`);
 
-        currentChartSymbol = cleanSymbol;
-        initializeTradingViewChart(cleanSymbol);
-        
-        // ✅ HYBRID APPROACH:
-        // 1. Immediately update dynamic data (price, positions, analysis) without reload
-        console.log(`🔄 [HYBRID] Starting dynamic updates...`);
-        
-        setTimeout(() => {
-            console.log(`🔄 [HYBRID-1] Fetching live price for: ${cleanSymbol}`);
-            updateLivePrice(cleanSymbol, true);
-        }, 50);
+        // ✅ Validate against Binance Futures list before updating UI/chart
+        // Prevents TradingView "symbol doesn't exist" and Live price hanging on invalid symbols.
+        fetch(`/validate_symbol/${encodeURIComponent(cleanSymbol)}?_t=${Date.now()}`)
+            .then(r => r.json())
+            .then(v => {
+                if (!v || !v.valid || !v.tradeable) {
+                    const msg = (v && v.message) ? v.message : 'Symbol not tradeable';
+                    alert(`⚠️ ${msg}\n\nPick another symbol.`);
 
-        setTimeout(() => {
-            console.log(`🔄 [HYBRID-2] Updating coin analysis for: ${cleanSymbol}`);
-            updateEmbeddedCoinDetails(cleanSymbol, true);
-        }, 100);
+                    // Revert dropdown to last valid selection
+                    if (symbolSelect) symbolSelect.value = lastValidSymbol;
+                    return;
+                }
 
-        setTimeout(() => {
-            console.log(`🔄 [HYBRID-3] Fetching coin details for: ${cleanSymbol}`);
-            fetchCoinDetails(cleanSymbol);
-        }, 150);
+                // Mark as last-known-good only after Binance confirms it
+                lastValidSymbol = cleanSymbol;
+                const prevHidden = document.querySelector('input[name="prev_symbol"]');
+                if (prevHidden) prevHidden.value = cleanSymbol;
 
-        setTimeout(() => {
-            console.log(`🔄 [HYBRID-4] Updating positions for: ${cleanSymbol}`);
-            // Force fresh positions (server supports fresh=1)
-            updateLivePositions(cleanSymbol, true);
-        }, 200);
+                currentChartSymbol = cleanSymbol;
+                initializeTradingViewChart(cleanSymbol);
 
-        // ✅ Ensure recent trades updates immediately on symbol change
-        setTimeout(() => {
-            console.log(`🔄 [HYBRID-6] Updating trade history for: ${cleanSymbol}`);
-            updateTradeHistory(cleanSymbol);
-        }, 220);
+                // ✅ HYBRID APPROACH:
+                // 1. Immediately update dynamic data (price, positions, analysis) without reload
+                console.log(`🔄 [HYBRID] Starting dynamic updates...`);
+                
+                setTimeout(() => {
+                    console.log(`🔄 [HYBRID-1] Fetching live price for: ${cleanSymbol}`);
+                    updateLivePrice(cleanSymbol, true);
+                }, 50);
 
-        setTimeout(() => {
-            console.log(`🔄 [HYBRID-5] Calculating sizing for: ${cleanSymbol}`);
-            updatePositionSizing(cleanSymbol);
-        }, 250);
+                setTimeout(() => {
+                    console.log(`🔄 [HYBRID-2] Updating coin analysis for: ${cleanSymbol}`);
+                    updateEmbeddedCoinDetails(cleanSymbol, true);
+                }, 100);
 
-        // 2. Update symbol labels immediately
-        document.querySelectorAll('#embed-modal-symbol').forEach(el => el.textContent = cleanSymbol);
-        const symbolTradeLabel = document.getElementById('symbol_trades_label');
-        if (symbolTradeLabel) symbolTradeLabel.textContent = cleanSymbol;
-        
-        console.log(`✅ [HYBRID] Dynamic updates complete (no reload).`);
+                setTimeout(() => {
+                    console.log(`🔄 [HYBRID-3] Fetching coin details for: ${cleanSymbol}`);
+                    fetchCoinDetails(cleanSymbol);
+                }, 150);
+
+                setTimeout(() => {
+                    console.log(`🔄 [HYBRID-4] Updating positions for: ${cleanSymbol}`);
+                    // Force fresh positions (server supports fresh=1)
+                    updateLivePositions(cleanSymbol, true);
+                }, 200);
+
+                // ✅ Ensure recent trades updates immediately on symbol change
+                setTimeout(() => {
+                    console.log(`🔄 [HYBRID-6] Updating trade history for: ${cleanSymbol}`);
+                    updateTradeHistory(cleanSymbol);
+                }, 220);
+
+                setTimeout(() => {
+                    console.log(`🔄 [HYBRID-5] Calculating sizing for: ${cleanSymbol}`);
+                    updatePositionSizing(cleanSymbol);
+                }, 250);
+
+                // 2. Update symbol labels immediately
+                document.querySelectorAll('#embed-modal-symbol').forEach(el => el.textContent = cleanSymbol);
+                const symbolTradeLabel = document.getElementById('symbol_trades_label');
+                if (symbolTradeLabel) symbolTradeLabel.textContent = cleanSymbol;
+                
+                console.log(`✅ [HYBRID] Dynamic updates complete (no reload).`);
+            })
+            .catch(err => {
+                console.error('❌ Symbol validation failed:', err);
+                if (symbolSelect) symbolSelect.value = lastValidSymbol;
+            });
         
         return false;
     }
