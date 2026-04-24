@@ -1122,32 +1122,56 @@ def execute_trade_action(balance, symbol, side, entry, order_type, sl_type, sl_v
             return {"success": False, "message": f"❌ Main order failed: {str(e)}"}
 
         # SL ORDER - Create with error tolerance
+        sl_created = False
+        sl_error = None
         try:
-            client.futures_create_order(symbol=symbol, side=x_side, type="STOP_MARKET", 
-                stopPrice=sl_p, closePosition=True, workingType="MARK_PRICE")
+            sl_order = client.futures_create_order(symbol=symbol, side=x_side, type="STOP_MARKET", 
+                stopPrice=sl_p, reduceOnly=True, workingType="MARK_PRICE")
+            if sl_order and sl_order.get("orderId"):
+                sl_created = True
+                print(f"✅ SL order created: {sl_order['orderId']}")
+            time.sleep(0.3)
         except Exception as e:
+            sl_error = str(e)
             print(f"⚠️ SL order creation failed: {e}")
-            log_trade_event("TRADE_WARN", f"⚠️ SL order failed but main position created: {str(e)}", user_id)
+            log_trade_event("TRADE_WARN", f"⚠️ SL order failed: {sl_error}", user_id)
 
         # TP1 PARTIAL - Create with error tolerance  
+        tp1_created = False
+        tp1_error = None
+        tp1_qty = 0
         try:
             if tp1 > 0 and ((side=="LONG" and tp1>entry) or (side=="SHORT" and tp1<entry)):
-                t1_qty = round_qty(symbol, qty * (tp1_pct/100), user_id)
-                if t1_qty > 0:
-                    client.futures_create_order(symbol=symbol, side=x_side, type="TAKE_PROFIT_MARKET",
-                        stopPrice=round_price(symbol, tp1, user_id), quantity=t1_qty, reduceOnly=True, workingType="MARK_PRICE")
+                tp1_qty = round_qty(symbol, qty * (tp1_pct/100), user_id)
+                if tp1_qty > 0:
+                    tp1_order = client.futures_create_order(symbol=symbol, side=x_side, type="TAKE_PROFIT_MARKET",
+                        stopPrice=round_price(symbol, tp1, user_id), quantity=tp1_qty, reduceOnly=True, workingType="MARK_PRICE")
+                    if tp1_order and tp1_order.get("orderId"):
+                        tp1_created = True
+                        print(f"✅ TP1 order created: {tp1_order['orderId']}")
+                    time.sleep(0.3)
         except Exception as e:
+            tp1_error = str(e)
             print(f"⚠️ TP1 order creation failed: {e}")
-            log_trade_event("TRADE_WARN", f"⚠️ TP1 order failed: {str(e)}", user_id)
+            log_trade_event("TRADE_WARN", f"⚠️ TP1 order failed: {tp1_error}", user_id)
 
         # TP2 REMAINDER - Create with error tolerance
+        tp2_created = False
+        tp2_error = None
         try:
             if tp2 > 0 and ((side=="LONG" and tp2>entry) or (side=="SHORT" and tp2<entry)):
-                client.futures_create_order(symbol=symbol, side=x_side, type="TAKE_PROFIT_MARKET",
-                    stopPrice=round_price(symbol, tp2, user_id), closePosition=True, workingType="MARK_PRICE")
+                tp2_qty = round_qty(symbol, qty - tp1_qty, user_id)
+                if tp2_qty > 0:
+                    tp2_order = client.futures_create_order(symbol=symbol, side=x_side, type="TAKE_PROFIT_MARKET",
+                        stopPrice=round_price(symbol, tp2, user_id), quantity=tp2_qty, reduceOnly=True, workingType="MARK_PRICE")
+                    if tp2_order and tp2_order.get("orderId"):
+                        tp2_created = True
+                        print(f"✅ TP2 order created: {tp2_order['orderId']}")
+                    time.sleep(0.3)
         except Exception as e:
+            tp2_error = str(e)
             print(f"⚠️ TP2 order creation failed: {e}")
-            log_trade_event("TRADE_WARN", f"⚠️ TP2 order failed: {str(e)}", user_id)
+            log_trade_event("TRADE_WARN", f"⚠️ TP2 order failed: {tp2_error}", user_id)
 
         # CREATE DB POSITION RECORD
         pos = TradePosition(
@@ -1165,6 +1189,26 @@ def execute_trade_action(balance, symbol, side, entry, order_type, sl_type, sl_v
         
         # Show if leverage was adjusted
         lev_note = f" (Adjusted from {original_lev}x)" if lev < original_lev else ""
+        
+        # Build status line showing which orders succeeded
+        status_parts = []
+        status_parts.append(f"Main: ✅" if main_order_id else "Main: ⚠️")
+        status_parts.append(f"SL: {'✅' if sl_created else '❌'}")
+        status_parts.append(f"TP1: {'✅' if tp1_created else '❌' if tp1 > 0 else '—'}")
+        status_parts.append(f"TP2: {'✅' if tp2_created else '❌' if tp2 > 0 else '—'}")
+        status_msg = " | ".join(status_parts)
+        
+        # Build warning messages for failed orders
+        warning_lines = []
+        if sl_error and not sl_created:
+            warning_lines.append(f"⚠️ SL: {sl_error}")
+        if tp1_error and tp1 > 0:
+            warning_lines.append(f"⚠️ TP1: {tp1_error}")
+        if tp2_error and tp2 > 0:
+            warning_lines.append(f"⚠️ TP2: {tp2_error}")
+        warning_msg = "\n".join(warning_lines)
+        
+        # Build detailed log entry
         tp_parts = []
         if tp1 and tp1 > 0:
             tp_parts.append(f"TP1:${tp1:.4f}" + (f" [{tp1_pct:g}%]" if tp1_pct else ""))
@@ -1177,7 +1221,30 @@ def execute_trade_action(balance, symbol, side, entry, order_type, sl_type, sl_v
         if f"positions_{user_id}" in _positions_cache: del _positions_cache[f"positions_{user_id}"]
         if f"trade_history_{user_id}" in _trade_history_cache: del _trade_history_cache[f"trade_history_{user_id}"]
 
-        return {"success": True, "message": f"✅ {side} {symbol} executed (1% risk) @ {lev}x leverage{lev_note}. DB tracked."}
+        # Final response with order status
+        main_message = f"✅ {side} {symbol} executed (1% risk) @ {lev}x leverage{lev_note}"
+        
+        if warning_msg:
+            final_message = (
+                main_message
+                + "\n\n📊 Order Status:\n"
+                + status_msg
+                + "\n\n⚠️ Warnings:\n"
+                + warning_msg
+            )
+        else:
+            final_message = main_message + "\n\n📊 Order Status:\n" + status_msg
+        
+        return {
+            "success": True, 
+            "message": final_message,
+            "order_status": {
+                "main": "✅" if main_order_id else "⚠️",
+                "sl": "✅" if sl_created else "❌",
+                "tp1": "✅" if tp1_created else "❌" if tp1 > 0 else "—",
+                "tp2": "✅" if tp2_created else "❌" if tp2 > 0 else "—",
+            }
+        }
         
     except Exception as e:
         db.session.rollback()
