@@ -1215,7 +1215,11 @@ def execute_trade_action(balance, symbol, side, entry, order_type, sl_type, sl_v
         if tp2 and tp2 > 0:
             tp_parts.append(f"TP2:${tp2:.4f}")
         tp_note = (" | " + " ".join(tp_parts)) if tp_parts else ""
-        log_trade_event("TRADE_OPEN", f"✅ 1% RISK {side} {symbol} | Entry:${entry:.4f} SL:${sl_p:.4f}{tp_note} Qty:{qty} Lev:{lev}x{lev_note}", user_id)
+        log_trade_event(
+            "TRADE_OPEN",
+            f"✅ 1% RISK {side} {symbol} | Entry:${entry:.4f} SL:${sl_p:.4f}{tp_note} Qty:{qty} Lev:{lev}x{lev_note} | {status_msg}",
+            user_id
+        )
 
         # Cache invalidation
         if f"positions_{user_id}" in _positions_cache: del _positions_cache[f"positions_{user_id}"]

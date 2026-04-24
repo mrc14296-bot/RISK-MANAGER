@@ -370,6 +370,14 @@
         {% if trade_status %}
         <div class="message {{ 'success' if trade_status.success else 'error' }}">
             {{ trade_status.message }}
+            {% if trade_status.order_status %}
+            <div style="margin-top: 6px; font-size: 10px; color: #cfefff;">
+                Main: {{ trade_status.order_status.main }} |
+                SL: {{ trade_status.order_status.sl }} |
+                TP1: {{ trade_status.order_status.tp1 }} |
+                TP2: {{ trade_status.order_status.tp2 }}
+            </div>
+            {% endif %}
         </div>
         {% endif %}
      
