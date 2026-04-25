@@ -983,6 +983,16 @@ def reset_today_stats_api():
     result = logic.reset_today_stats(current_user.id)
     return jsonify(result)
 
+@app.route("/api/debug_flags")
+@login_required
+def debug_flags_api():
+    """Quick debug for env-driven flags."""
+    return jsonify({
+        "testing_mode": bool(getattr(config, "TESTING_MODE", False)),
+        "is_admin": bool(getattr(current_user, "is_admin", False)),
+        "user_id": getattr(current_user, "id", None),
+    })
+
 @app.route("/api/coin-details/<symbol>")
 @login_required
 @subscription_required
