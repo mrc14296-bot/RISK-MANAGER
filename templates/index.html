@@ -933,6 +933,17 @@
                 const pnlColor = pos.unrealized_pnl >= 0 ? '#00ff88' : '#ff4d4d';
                 const roiPercent = (pos.dashboard_roi_percent ?? pos.roi_percent).toFixed(1);
                 const marginRatio = (pos.dashboard_margin_ratio ?? pos.margin_ratio).toFixed(2);
+                const protectiveOrders = (Array.isArray(pos.open_orders) ? pos.open_orders : []).filter(o =>
+                    ['STOP_MARKET', 'TAKE_PROFIT_MARKET', 'STOP', 'TAKE_PROFIT'].includes(String(o.type || '').toUpperCase())
+                );
+                const orderRows = protectiveOrders.length
+                    ? protectiveOrders.map(o => {
+                        const oType = String(o.type || '').toUpperCase();
+                        const label = oType.includes('STOP') ? 'SL' : (oType.includes('TAKE_PROFIT') ? 'TP' : oType);
+                        const px = Number(o.price || 0);
+                        return `<div style="margin-bottom: 2px;">${label} #${o.orderId || '-'} @ $${Number.isFinite(px) ? px.toFixed(4) : '-'}</div>`;
+                    }).join('')
+                    : '<div style="color: #666;">No active protective orders yet</div>';
                 totalOrders += pos.open_orders ? pos.open_orders.length : 0;
                 html += `
                     <div style="border: 1px solid #333; padding: 12px; margin-bottom: 10px; border-radius: 6px; background: rgba(10, 10, 10, 0.5);">
@@ -985,6 +996,11 @@
                         <div id="tp_sl_info_${pos.symbol}" style="background: rgba(0, 212, 255, 0.05); padding: 8px; border-radius: 4px; margin-bottom: 8px; border-left: 2px solid #00d4ff; font-size: 9px;">
                             <div style="color: #00d4ff; font-weight: bold; margin-bottom: 4px;">📍 TP/SL Levels:</div>
                             <div id="tp_sl_details_${pos.symbol}" style="color: #aaa; font-size: 8px;">Loading TP/SL data...</div>
+                        </div>
+
+                        <div style="background: rgba(120, 255, 180, 0.05); padding: 8px; border-radius: 4px; margin-bottom: 8px; border-left: 2px solid #40d67a; font-size: 8px; color: #b8f5c9;">
+                            <div style="color: #40d67a; font-weight: bold; margin-bottom: 4px;">🧾 Active SL/TP Order IDs:</div>
+                            ${orderRows}
                         </div>
                         
                         <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 6px;">

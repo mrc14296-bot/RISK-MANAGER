@@ -1127,7 +1127,7 @@ def execute_trade_action(balance, symbol, side, entry, order_type, sl_type, sl_v
             return {"success": False, "message": f"❌ Main order failed: {str(e)}"}
 
         def _create_order_with_fallbacks(variants):
-            last_err = None
+            errs = []
             for params in variants:
                 try:
                     resp = client.futures_create_order(**params)
@@ -1135,9 +1135,25 @@ def execute_trade_action(balance, symbol, side, entry, order_type, sl_type, sl_v
                         return True, resp, None
                     return True, resp, None
                 except Exception as ex:
-                    last_err = str(ex)
+                    errs.append(str(ex))
                     continue
-            return False, None, last_err or "Unknown order placement error"
+            return False, None, " | ".join(errs) if errs else "Unknown order placement error"
+
+        def _emergency_close_position():
+            try:
+                pinfo = client.futures_position_information(symbol=symbol)
+                live_pos = next((p for p in pinfo if abs(float(p.get("positionAmt", 0))) > 0), None)
+                if not live_pos:
+                    return
+                pos_amt = float(live_pos.get("positionAmt", 0))
+                close_qty = round_qty(symbol, abs(pos_amt), user_id)
+                if close_qty <= 0:
+                    return
+                close_side = Client.SIDE_SELL if pos_amt > 0 else Client.SIDE_BUY
+                client.futures_create_order(symbol=symbol, side=close_side, type="MARKET", quantity=close_qty, reduceOnly=True)
+                log_trade_event("TRADE_WARN", f"⚠️ Emergency close executed for {symbol} after SL placement failure", user_id)
+            except Exception as close_err:
+                log_trade_event("TRADE_WARN", f"⚠️ Emergency close failed for {symbol}: {close_err}", user_id)
 
         # SL ORDER - Create with error tolerance
         sl_created = False
@@ -1157,9 +1173,24 @@ def execute_trade_action(balance, symbol, side, entry, order_type, sl_type, sl_v
                     "side": x_side,
                     "type": "STOP_MARKET",
                     "stopPrice": sl_p,
+                    "closePosition": True,
+                },
+                {
+                    "symbol": symbol,
+                    "side": x_side,
+                    "type": "STOP_MARKET",
+                    "stopPrice": sl_p,
                     "quantity": qty,
                     "reduceOnly": True,
                     "workingType": "MARK_PRICE",
+                },
+                {
+                    "symbol": symbol,
+                    "side": x_side,
+                    "type": "STOP_MARKET",
+                    "stopPrice": sl_p,
+                    "quantity": qty,
+                    "reduceOnly": True,
                 },
             ]
             sl_created, sl_order, sl_error = _create_order_with_fallbacks(sl_variants)
@@ -1171,6 +1202,14 @@ def execute_trade_action(balance, symbol, side, entry, order_type, sl_type, sl_v
             sl_error = str(e)
             print(f"⚠️ SL order creation failed: {e}")
             log_trade_event("TRADE_WARN", f"⚠️ SL order failed: {sl_error}", user_id)
+
+        # HARD SAFETY: never leave live position without SL
+        if not sl_created:
+            _emergency_close_position()
+            return {
+                "success": False,
+                "message": f"❌ Trade aborted: Stop Loss order rejected by Binance.\n{sl_error or ''}\nPosition auto-closed for safety."
+            }
 
         # TP1 PARTIAL - Create with error tolerance  
         tp1_created = False
@@ -1194,13 +1233,10 @@ def execute_trade_action(balance, symbol, side, entry, order_type, sl_type, sl_v
                         {
                             "symbol": symbol,
                             "side": x_side,
-                            "type": "TAKE_PROFIT",
+                            "type": "TAKE_PROFIT_MARKET",
                             "stopPrice": tp1_price,
-                            "price": tp1_price,
                             "quantity": tp1_qty,
                             "reduceOnly": True,
-                            "timeInForce": "GTC",
-                            "workingType": "MARK_PRICE",
                         },
                     ]
                     tp1_created, tp1_order, tp1_error = _create_order_with_fallbacks(tp1_variants)
@@ -1235,6 +1271,13 @@ def execute_trade_action(balance, symbol, side, entry, order_type, sl_type, sl_v
                             "side": x_side,
                             "type": "TAKE_PROFIT_MARKET",
                             "stopPrice": tp2_price,
+                            "closePosition": True,
+                        },
+                        {
+                            "symbol": symbol,
+                            "side": x_side,
+                            "type": "TAKE_PROFIT_MARKET",
+                            "stopPrice": tp2_price,
                             "quantity": tp2_qty,
                             "reduceOnly": True,
                             "workingType": "MARK_PRICE",
@@ -1242,13 +1285,10 @@ def execute_trade_action(balance, symbol, side, entry, order_type, sl_type, sl_v
                         {
                             "symbol": symbol,
                             "side": x_side,
-                            "type": "TAKE_PROFIT",
+                            "type": "TAKE_PROFIT_MARKET",
                             "stopPrice": tp2_price,
-                            "price": tp2_price,
                             "quantity": tp2_qty,
                             "reduceOnly": True,
-                            "timeInForce": "GTC",
-                            "workingType": "MARK_PRICE",
                         },
                     ]
                     tp2_created, tp2_order, tp2_error = _create_order_with_fallbacks(tp2_variants)
