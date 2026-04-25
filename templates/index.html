@@ -2307,6 +2307,36 @@
         updateTradeLimits();
     }
 
+    // After successful execution, aggressively self-sync panels for a short burst
+    // so new position/trade appears without any manual refresh.
+    function startPostTradeSyncBurst() {
+        const wasTradeSuccess = {{ 'true' if (trade_status and trade_status.success) else 'false' }};
+        if (!wasTradeSuccess) return;
+
+        const activeSymbol = (getSelectedSymbol() || '{{ selected_symbol or "BTCUSDT" }}').trim().toUpperCase();
+        if (!activeSymbol) return;
+
+        let attempts = 0;
+        const maxAttempts = 18; // ~22 seconds at 1.2s
+        const intervalMs = 1200;
+
+        const timer = setInterval(() => {
+            attempts += 1;
+            refreshSelectedSymbolPanels(activeSymbol, true);
+            updateLiveTradeLog();
+
+            const hasPosition = !!currentPositions[activeSymbol];
+            const tradeBox = document.getElementById('trade_history');
+            const tradeBoxText = tradeBox ? (tradeBox.textContent || '') : '';
+            const hasTrade = tradeBoxText.toUpperCase().includes(activeSymbol);
+
+            // Stop early once either position or matching trade is visible.
+            if (hasPosition || hasTrade || attempts >= maxAttempts) {
+                clearInterval(timer);
+            }
+        }, intervalMs);
+    }
+
     updateLivePositions = function(symbol = null, forceFresh = false) {
         const targetSymbol = (symbol || getSelectedSymbol() || '{{ selected_symbol or "BTCUSDT" }}').trim().toUpperCase();
         const container = document.getElementById('live_positions');
@@ -2403,9 +2433,11 @@
         document.addEventListener('DOMContentLoaded', () => {
             console.log('✅ Page loaded, initializing dynamic functions');
             refreshSelectedSymbolPanels(getSelectedSymbol() || '{{ selected_symbol or "BTCUSDT" }}', true);
+            startPostTradeSyncBurst();
         });
     } else {
         refreshSelectedSymbolPanels(getSelectedSymbol() || '{{ selected_symbol or "BTCUSDT" }}', true);
+        startPostTradeSyncBurst();
     }
 
     // ✅ AUTO-REFRESH TIMERS (Background updates while user trades)
