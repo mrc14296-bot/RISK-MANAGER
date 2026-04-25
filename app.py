@@ -973,6 +973,16 @@ def today_stats_api():
     stats = logic.get_today_stats(current_user.id)
     return jsonify(stats)
 
+@app.route("/api/reset_today_stats", methods=["POST"])
+@login_required
+@subscription_required
+def reset_today_stats_api():
+    """Reset only today's per-user trade counters for testing."""
+    if not getattr(config, "TESTING_MODE", False) and not getattr(current_user, "is_admin", False):
+        return jsonify({"success": False, "message": "Not allowed"}), 403
+    result = logic.reset_today_stats(current_user.id)
+    return jsonify(result)
+
 @app.route("/api/coin-details/<symbol>")
 @login_required
 @subscription_required
@@ -1270,7 +1280,8 @@ def index():
         default_tp1_value=raw_tp1,
         default_tp1_mode=tp1_mode,
         today_stats=today_stats,
-        wallet_debug=wallet_debug
+        wallet_debug=wallet_debug,
+        testing_mode=getattr(config, "TESTING_MODE", False)
     )
 
 def ensure_sqlite_trade_positions_columns():

@@ -90,3 +90,9 @@ SUPPORTED_EXCHANGES = {
         'description': 'Connect your Upstox account (India)'
     }
 }
+
+# ==========================
+# Testing / Admin utilities
+# ==========================
+# When enabled, the dashboard shows test-only controls like resetting daily limits.
+TESTING_MODE = os.getenv('TESTING_MODE', 'false').strip().lower() in ('1', 'true', 'yes', 'on')
