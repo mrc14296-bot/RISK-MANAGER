@@ -1240,6 +1240,19 @@ def execute_trade_action(balance, symbol, side, entry, order_type, sl_type, sl_v
                     continue
             return False, None, " | ".join(errs) if errs else "Unknown order placement error"
 
+        def _short_error(err_text):
+            e = str(err_text or "").strip()
+            if not e:
+                return "Unknown error"
+            lo = e.lower()
+            if "-4120" in lo or "algo order api endpoints" in lo:
+                return "Algo order endpoint not supported for this symbol/account (-4120)"
+            if "-1102" in lo and "quantity" in lo:
+                return "Missing quantity parameter (-1102)"
+            if len(e) > 140:
+                e = e[:140] + "..."
+            return e
+
         def _emergency_close_position():
             try:
                 pinfo = client.futures_position_information(symbol=symbol)
@@ -1292,6 +1305,27 @@ def execute_trade_action(balance, symbol, side, entry, order_type, sl_type, sl_v
                     "stopPrice": sl_p,
                     "quantity": qty,
                     "reduceOnly": True,
+                },
+                {
+                    "symbol": symbol,
+                    "side": x_side,
+                    "type": "STOP",
+                    "stopPrice": sl_p,
+                    "price": sl_p,
+                    "quantity": qty,
+                    "reduceOnly": True,
+                    "timeInForce": "GTC",
+                    "workingType": "MARK_PRICE",
+                },
+                {
+                    "symbol": symbol,
+                    "side": x_side,
+                    "type": "STOP",
+                    "stopPrice": sl_p,
+                    "price": sl_p,
+                    "quantity": qty,
+                    "reduceOnly": True,
+                    "timeInForce": "GTC",
                 },
             ]
             sl_created, sl_order, sl_error = _create_order_with_fallbacks(sl_variants)
@@ -1346,6 +1380,27 @@ def execute_trade_action(balance, symbol, side, entry, order_type, sl_type, sl_v
                             "quantity": tp1_qty,
                             "reduceOnly": True,
                         },
+                        {
+                            "symbol": symbol,
+                            "side": x_side,
+                            "type": "TAKE_PROFIT",
+                            "stopPrice": tp1_price,
+                            "price": tp1_price,
+                            "quantity": tp1_qty,
+                            "reduceOnly": True,
+                            "timeInForce": "GTC",
+                            "workingType": "MARK_PRICE",
+                        },
+                        {
+                            "symbol": symbol,
+                            "side": x_side,
+                            "type": "TAKE_PROFIT",
+                            "stopPrice": tp1_price,
+                            "price": tp1_price,
+                            "quantity": tp1_qty,
+                            "reduceOnly": True,
+                            "timeInForce": "GTC",
+                        },
                     ]
                     tp1_created, tp1_order, tp1_error = _create_order_with_fallbacks(tp1_variants)
                     if tp1_created and tp1_order and tp1_order.get("orderId"):
@@ -1398,6 +1453,27 @@ def execute_trade_action(balance, symbol, side, entry, order_type, sl_type, sl_v
                             "quantity": tp2_qty,
                             "reduceOnly": True,
                         },
+                        {
+                            "symbol": symbol,
+                            "side": x_side,
+                            "type": "TAKE_PROFIT",
+                            "stopPrice": tp2_price,
+                            "price": tp2_price,
+                            "quantity": tp2_qty,
+                            "reduceOnly": True,
+                            "timeInForce": "GTC",
+                            "workingType": "MARK_PRICE",
+                        },
+                        {
+                            "symbol": symbol,
+                            "side": x_side,
+                            "type": "TAKE_PROFIT",
+                            "stopPrice": tp2_price,
+                            "price": tp2_price,
+                            "quantity": tp2_qty,
+                            "reduceOnly": True,
+                            "timeInForce": "GTC",
+                        },
                     ]
                     tp2_created, tp2_order, tp2_error = _create_order_with_fallbacks(tp2_variants)
                     if tp2_created and tp2_order and tp2_order.get("orderId"):
@@ -1437,12 +1513,14 @@ def execute_trade_action(balance, symbol, side, entry, order_type, sl_type, sl_v
         # Build warning messages for failed orders
         warning_lines = []
         if sl_error and not sl_created:
-            warning_lines.append(f"⚠️ SL: {sl_error}")
+            warning_lines.append(f"⚠️ SL: {_short_error(sl_error)}")
         if tp1_error and tp1 > 0:
-            warning_lines.append(f"⚠️ TP1: {tp1_error}")
+            warning_lines.append(f"⚠️ TP1: {_short_error(tp1_error)}")
         if tp2_error and tp2 > 0:
-            warning_lines.append(f"⚠️ TP2: {tp2_error}")
-        warning_msg = "\n".join(warning_lines)
+            warning_lines.append(f"⚠️ TP2: {_short_error(tp2_error)}")
+
+        # De-duplicate repeated fallback errors (same root issue from multiple attempts)
+        warning_msg = "\n".join(dict.fromkeys(warning_lines))
         
         # Build detailed log entry
         tp_parts = []

@@ -204,6 +204,10 @@ form > div[style*="grid-template-columns: 1fr 1fr"] {
     margin-bottom: 8px;
     font-weight: bold;
     animation: fadeSlideIn 0.35s ease both;
+    max-height: 84px;
+    overflow-y: auto;
+    white-space: pre-line;
+    line-height: 1.25;
 }
 
 .message.success {
@@ -708,6 +712,7 @@ table tr:nth-child(even) td { background: rgba(0,212,255,0.02); }
 /* ── Details/Summary ──────────────────────────────────────── */
 details > summary {
     cursor: pointer;
+    -webkit-user-select: none;
     user-select: none;
     transition: color 0.2s;
 }
