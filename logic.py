@@ -23,6 +23,7 @@ _leverage_cache = {}
 _leverage_cache_time = {}
 _last_call_time = 0
 CACHE_DURATION = 5
+_virtual_guard_last_run = {}
 
 # Known leverage limits for common coins (updated based on Binance data)
 # These serve as fallback when API fails
@@ -761,6 +762,9 @@ def get_open_positions(user_id=None):
         return _positions_cache[cache_key]
     
     try:
+        # Virtual TP/SL fallback enforcement (for accounts/symbols rejecting algo orders)
+        run_virtual_tp_sl_guard(user_id)
+
         client = get_client(user_id)
         if client is None: 
             return []
@@ -831,6 +835,9 @@ def get_open_positions_live(user_id=None):
     This bypasses all caching to ensure the most current data
     """
     try:
+        # Virtual TP/SL fallback enforcement (for accounts/symbols rejecting algo orders)
+        run_virtual_tp_sl_guard(user_id)
+
         client = get_client(user_id)
         if client is None: 
             return []
@@ -908,6 +915,100 @@ def get_open_orders_for_symbol(symbol, user_id=None):
         } for o in orders]
     except Exception:
         return []
+
+def run_virtual_tp_sl_guard(user_id=None):
+    """
+    Fallback TP/SL enforcement for symbols/accounts where Binance rejects algo order endpoints (-4120).
+    Runs opportunistically during open-position fetches and closes/partials by market when levels are hit.
+    """
+    from models import TradePosition, db
+
+    if not user_id:
+        return
+
+    now = time.time()
+    last = _virtual_guard_last_run.get(user_id, 0)
+    # Guard loop throttle: avoid repeated firing too fast
+    if (now - last) < 1.5:
+        return
+    _virtual_guard_last_run[user_id] = now
+
+    try:
+        client = get_client(user_id)
+        if client is None:
+            return
+
+        positions = client.futures_position_information(recvWindow=10000)
+        pos_by_symbol = {}
+        for p in positions:
+            sym = p.get("symbol")
+            amt = float(p.get("positionAmt", 0) or 0)
+            if sym and abs(amt) > 0:
+                pos_by_symbol[sym] = {
+                    "amt": amt,
+                    "mark": float(p.get("markPrice", 0) or 0),
+                }
+
+        tracked = TradePosition.query.filter_by(user_id=user_id, status='open').all()
+        if not tracked:
+            return
+
+        for t in tracked:
+            sym = t.symbol
+            live = pos_by_symbol.get(sym)
+            if not live:
+                # Exchange position gone; normalize DB state.
+                t.status = 'closed'
+                t.remain_qty_pct = 0.0
+                continue
+
+            mark = float(live.get("mark", 0) or 0)
+            if mark <= 0:
+                continue
+
+            side = t.side
+            sl_level = float(t.current_sl or t.sl_price or 0)
+
+            def _is_sl_hit():
+                if sl_level <= 0:
+                    return False
+                return (side == 'LONG' and mark <= sl_level) or (side == 'SHORT' and mark >= sl_level)
+
+            def _is_tp_hit(tp_price):
+                if not tp_price or tp_price <= 0:
+                    return False
+                return (side == 'LONG' and mark >= tp_price) or (side == 'SHORT' and mark <= tp_price)
+
+            # SL has highest priority
+            if _is_sl_hit():
+                close_position(sym, user_id)
+                log_trade_event("TRADE_WARN", f"🛡️ Virtual SL executed for {sym} @ {mark:.6f}", user_id)
+                continue
+
+            # TP1 partial (only once)
+            tp1 = float(t.tp1_price or 0)
+            tp1_pct = float(t.tp1_qty_pct or 0)
+            remain = float(t.remain_qty_pct or 100.0)
+            tp1_not_done = tp1 > 0 and tp1_pct > 0 and remain > (100.0 - tp1_pct + 0.1)
+            if tp1_not_done and _is_tp_hit(tp1):
+                partial_close_position(sym, close_percent=tp1_pct, user_id=user_id)
+                log_trade_event("TRADE_WARN", f"🎯 Virtual TP1 executed for {sym} @ {mark:.6f}", user_id)
+                continue
+
+            # TP2 final close
+            tp2 = float(t.tp2_price or 0)
+            if tp2 > 0 and _is_tp_hit(tp2):
+                close_position(sym, user_id)
+                log_trade_event("TRADE_WARN", f"🎯 Virtual TP2 executed for {sym} @ {mark:.6f}", user_id)
+                continue
+
+        db.session.commit()
+    except Exception as e:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        print(f"Virtual TP/SL guard error: {e}")
 
 def get_user_daily_stats(user_id):
     """Get or create today's stats from DB"""
@@ -1203,8 +1304,15 @@ def execute_trade_action(balance, symbol, side, entry, order_type, sl_type, sl_v
             print(f"⚠️ SL order creation failed: {e}")
             log_trade_event("TRADE_WARN", f"⚠️ SL order failed: {sl_error}", user_id)
 
-        # HARD SAFETY: never leave live position without SL
-        if not sl_created:
+        # HARD SAFETY:
+        # If Binance rejects algo order type (-4120), switch to virtual guard fallback.
+        # Otherwise, emergency-close to avoid unprotected exposure.
+        virtual_guard_enabled = False
+        sl_err_txt = (sl_error or "").lower()
+        if (not sl_created) and ("-4120" in sl_err_txt or "algo order api endpoints" in sl_err_txt):
+            virtual_guard_enabled = True
+            log_trade_event("TRADE_WARN", f"⚠️ {symbol}: Exchange SL/TP algo not supported, virtual guard enabled", user_id)
+        elif not sl_created:
             _emergency_close_position()
             return {
                 "success": False,
@@ -1366,6 +1474,9 @@ def execute_trade_action(balance, symbol, side, entry, order_type, sl_type, sl_v
             )
         else:
             final_message = main_message + "\n\n📊 Order Status:\n" + status_msg
+
+        if virtual_guard_enabled:
+            final_message += "\n\n🛡️ Protection mode: Virtual TP/SL guard active (server-managed)."
         
         return {
             "success": True, 
