@@ -396,8 +396,12 @@ def calculate_position_sizing(unutilized_margin, entry, sl_type, sl_value, side=
         "error": None
     }
 
-def get_open_positions(user_id=None):
+def get_open_positions(user_id=None, force_refresh=False):
     global _positions_cache, _positions_cache_time
+    if force_refresh:
+        cache_key = f"positions_{user_id or 'public'}"
+        _positions_cache.pop(cache_key, None)
+        _positions_cache_time.pop(cache_key, None)
     current_time = time.time()
     cache_key = f"positions_{user_id or 'public'}"
     
