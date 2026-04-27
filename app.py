@@ -1,4 +1,4 @@
-﻿from flask import Flask, render_template, request, session, jsonify, redirect, url_for, Response, flash
+from flask import Flask, render_template, request, session, jsonify, redirect, url_for, Response, flash
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from authlib.integrations.flask_client import OAuth
@@ -415,8 +415,8 @@ def validate_symbol_api(symbol):
 @subscription_required
 def get_open_positions_api():
     symbol_filter = request.args.get('symbol', '').strip().upper()
-    fresh = request.args.get('fresh', '').strip() in {'1', 'true', 'yes'}
-    all_positions = logic.get_open_positions_live(current_user.id) if fresh else logic.get_open_positions(current_user.id)
+    fresh = request.args.get('fresh', '0') == '1'
+    all_positions = logic.get_open_positions(current_user.id, force_refresh=fresh)
     
     # Filter by symbol if provided
     if symbol_filter:
@@ -453,7 +453,7 @@ def get_liquidation_prices_api():
 @login_required
 @subscription_required
 def get_trade_history_api():
-    fresh = request.args.get('fresh', '').strip() in {'1', 'true', 'yes'}
+    fresh = request.args.get('fresh', '0') == '1'
     trades = logic.get_trade_history(current_user.id, force_refresh=fresh)
     symbol_filter = request.args.get('symbol', '').strip().upper()
     if symbol_filter:
@@ -722,6 +722,11 @@ def index():
         )
         
         session["trade_status"] = result
+        # Invalidate position and trade history caches so next page load is always fresh
+        logic._positions_cache.pop(f"positions_{current_user.id}", None)
+        logic._positions_cache_time.pop(f"positions_{current_user.id}", None)
+        logic._trade_history_cache.pop(current_user.id, None)
+        logic._trade_history_cache_time.pop(current_user.id, None)
         return redirect(url_for("index"))
 
     return render_template(
