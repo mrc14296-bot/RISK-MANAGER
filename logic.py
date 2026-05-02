@@ -61,12 +61,13 @@ def select_symbol(user_id, symbol):
     receives everything in ONE response (no second-click delay).
     """
     # 1. Invalidate the REAL position cache used by get_open_positions()
-    cache_key = f"positions_{user_id or 'public'}"
-    _positions_cache.pop(cache_key, None)
-    _positions_cache_time.pop(cache_key, None)
+    cache_key_pos = f"positions_{user_id or 'public'}"
+    _positions_cache.pop(cache_key_pos, None)
+    _positions_cache_time.pop(cache_key_pos, None)
     # Invalidate trade-history + analysis caches for this user/symbol
-    _trades_cache.pop(user_id, None)
-    _trades_cache_time.pop(user_id, None)
+    cache_key_hist = f"trade_history_{user_id or 'public'}"
+    _trade_history_cache.pop(cache_key_hist, None)
+    _trade_history_cache_time.pop(cache_key_hist, None)
     _analysis_cache.pop(symbol, None)
     # 2. Remember the user's currently selected symbol (best-effort)
     try:
@@ -1266,8 +1267,12 @@ def execute_trade_action(balance, symbol, side, entry, order_type, sl_type, sl_v
             user_id
         )
         # Cache invalidation
-        if f"positions_{user_id}" in _positions_cache: del _positions_cache[f"positions_{user_id}"]
-        if f"trade_history_{user_id}" in _trade_history_cache: del _trade_history_cache[f"trade_history_{user_id}"]
+        cache_key_pos = f"positions_{user_id or 'public'}"
+        _positions_cache.pop(cache_key_pos, None)
+        _positions_cache_time.pop(cache_key_pos, None)
+        cache_key_hist = f"trade_history_{user_id or 'public'}"
+        _trade_history_cache.pop(cache_key_hist, None)
+        _trade_history_cache_time.pop(cache_key_hist, None)
         # Final response with order status
         main_message = f"✅ {side} {symbol} executed (1% risk) @ {lev}x leverage{lev_note}"
         
@@ -1454,17 +1459,21 @@ def get_live_pnl(symbol, user_id=None):
         return {"success": False, "error": str(e)}
 
 def get_trade_history(user_id=None, force_refresh=False):
+    from models import TradePosition
     global _trade_history_cache, _trade_history_cache_time
     current_time = time.time()
     cache_key = f"trade_history_{user_id or 'public'}"
     
-    # Return cached trade history if less than 60 seconds old
-    if (not force_refresh) and cache_key in _trade_history_cache and (current_time - _trade_history_cache_time.get(cache_key, 0)) < 60:
+    # Return cached trade history if less than 10 seconds old
+    if (not force_refresh) and cache_key in _trade_history_cache and (current_time - _trade_history_cache_time.get(cache_key, 0)) < 10:
         return _trade_history_cache[cache_key]
     
     try:
         client = get_client(user_id)
-        trades = client.futures_account_trades(limit=500)
+        # Increase lookback to 7 days
+        start_time = int((time.time() - 7 * 24 * 3600) * 1000)
+        binance_trades = client.futures_account_trades(limit=1000, startTime=start_time)
+        
         trade_history = [{
             'time': datetime.fromtimestamp(t.get('time', 0)/1000).strftime("%Y-%m-%d %H:%M:%S"), 
             'symbol': t.get('symbol'), 
@@ -1473,15 +1482,49 @@ def get_trade_history(user_id=None, force_refresh=False):
             'price': float(t.get('price', 0)), 
             'realized_pnl': float(t.get('realizedPnl', 0)), 
             'commission': float(t.get('commission', 0)), 
-            'order_id': t.get('orderId')
-        } for t in sorted(trades, key=lambda x: x.get('time', 0), reverse=True)]
+            'order_id': str(t.get('orderId')),
+            'raw_time': t.get('time', 0)
+        } for t in binance_trades]
+        
+        # Merge with local TradePosition records
+        if user_id:
+            db_positions = TradePosition.query.filter_by(user_id=user_id).all()
+            existing_order_ids = {t['order_id'] for t in trade_history}
+            
+            for pos in db_positions:
+                oid = str(pos.opening_order_id) if pos.opening_order_id else None
+                if oid and oid not in existing_order_ids:
+                    trade_history.append({
+                        'time': pos.created_at.strftime("%Y-%m-%d %H:%M:%S") if pos.created_at else "N/A",
+                        'symbol': pos.symbol,
+                        'side': pos.side,
+                        'qty': float(pos.initial_qty or 0),
+                        'price': float(pos.entry_price or 0),
+                        'realized_pnl': float(pos.unrealized_pnl or 0), # Best effort if closed
+                        'commission': 0.0,
+                        'order_id': oid,
+                        'sl_price': float(pos.sl_price or 0),
+                        'current_sl': float(pos.current_sl or 0),
+                        'tp1_price': float(pos.tp1_price or 0),
+                        'tp1_qty_pct': float(pos.tp1_qty_pct or 0),
+                        'tp2_price': float(pos.tp2_price or 0),
+                        'remain_qty_pct': float(pos.remain_qty_pct or 0),
+                        'position_status': pos.status or 'open',
+                        'raw_time': int(pos.created_at.timestamp() * 1000) if pos.created_at else 0
+                    })
+        
+        # Sort by time descending
+        trade_history.sort(key=lambda x: x.get('raw_time', 0), reverse=True)
+        
+        # Attach levels to Binance trades if not already present
         trade_history = attach_trade_levels(trade_history, user_id)
         
         # Cache the results
         _trade_history_cache[cache_key] = trade_history
         _trade_history_cache_time[cache_key] = current_time
         return trade_history
-    except Exception: 
+    except Exception as e:
+        print(f"Error in get_trade_history: {e}")
         return []
 
 def attach_trade_levels(trades, user_id=None):

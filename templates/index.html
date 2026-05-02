@@ -870,11 +870,12 @@
     
     // Live Updates - Enhanced with real-time liquidation prices
     function updateLivePositions() {
+        const container = document.getElementById('live_positions');
         // Fetch main positions data (5-second cache)
         fetch('/get_open_positions')
         .then(r => r.json())
         .then(data => {
-            if (data.positions && data.positions.length > 0) {
+            if (data.positions) {
                 currentPositions = {};
                 data.positions.forEach(pos => {
                     currentPositions[pos.symbol] = pos;
@@ -885,7 +886,9 @@
             }
             renderPositions();
         }).catch(() => {
-            document.getElementById('live_positions').innerHTML = '<div style="text-align: center; color: #ff4444; padding: 24px 12px; font-size: 10px;">Connection Error</div>';
+            if (!container || container.innerHTML.trim() === '' || container.innerHTML.includes('No open positions')) {
+                document.getElementById('live_positions').innerHTML = '<div style="text-align: center; color: #ff4444; padding: 24px 12px; font-size: 10px;">Connection Error</div>';
+            }
         });
     }
     
@@ -1045,27 +1048,22 @@
         });
     }
 
-    function updateTradeHistory(symbol = null) {
-        const activeSymbol = (symbol || getSelectedSymbol() || '').trim().toUpperCase();
+    function updateTradeHistory() {
         const container = document.getElementById('trade_history');
         if (!container) return;
 
-        container.innerHTML = '<div style="text-align: center; color: #666; padding: 18px 0; font-size: 8px;">Loading trades...</div>';
+        if (!container.innerHTML || container.innerHTML.includes('No recent trades')) {
+            container.innerHTML = '<div style="text-align: center; color: #666; padding: 18px 0; font-size: 8px;">Loading trades...</div>';
+        }
 
-        const url = activeSymbol
-            ? `/get_trade_history?symbol=${encodeURIComponent(activeSymbol)}&fresh=1&_t=${Date.now()}`
-            : `/get_trade_history?fresh=1&_t=${Date.now()}`;
+        const url = `/get_trade_history?fresh=1&_t=${Date.now()}`;
         fetch(url)
         .then(r => r.json())
         .then(data => {
-            if (activeSymbol && getSelectedSymbol() !== activeSymbol) {
-                return;
-            }
-
             const trades = Array.isArray(data.trades) ? data.trades : [];
             if (trades.length > 0) {
                 let html = '';
-                trades.slice(0, 10).forEach(trade => {
+                trades.slice(0, 50).forEach(trade => {
                     const pnlColor = trade.realized_pnl >= 0 ? '#00ff88' : '#ff4444';
                     const hasLevels = (trade.sl_price && trade.sl_price > 0) || (trade.tp1_price && trade.tp1_price > 0) || (trade.tp2_price && trade.tp2_price > 0);
                     const levelsLine = hasLevels
@@ -1080,12 +1078,14 @@
                 });
                 container.innerHTML = html;
             } else {
-                container.innerHTML = `<div style="text-align: center; color: #666; padding: 18px 0; font-size: 8px;">No recent trades${activeSymbol ? ` for ${activeSymbol}` : ''}</div>`;
+                container.innerHTML = `<div style="text-align: center; color: #666; padding: 18px 0; font-size: 8px;">No recent trades</div>`;
             }
         })
         .catch(err => {
             console.error('Error fetching trade history:', err);
-            container.innerHTML = '<div style="text-align: center; color: #ff4444; padding: 18px 0; font-size: 8px;">Trade history unavailable</div>';
+            if (!container.innerHTML || container.innerHTML.includes('Loading trades...')) {
+                container.innerHTML = '<div style="text-align: center; color: #ff4444; padding: 18px 0; font-size: 8px;">Trade history unavailable</div>';
+            }
         });
     }
 
@@ -2408,9 +2408,13 @@
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => {
             console.log('✅ Page loaded, initializing dynamic functions');
+            updateLivePositions();
+            updateTradeHistory();
             refreshSelectedSymbolPanels(getSelectedSymbol() || '{{ selected_symbol or "BTCUSDT" }}', true);
         });
     } else {
+        updateLivePositions();
+        updateTradeHistory();
         refreshSelectedSymbolPanels(getSelectedSymbol() || '{{ selected_symbol or "BTCUSDT" }}', true);
     }
 

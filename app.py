@@ -419,7 +419,7 @@ def get_open_positions_api():
     all_positions = logic.get_open_positions(current_user.id, force_refresh=fresh)
     
     # Filter by symbol if provided
-    if symbol_filter:
+    if symbol_filter and symbol_filter.strip():
         filtered_positions = [p for p in all_positions if isinstance(p, dict) and p.get('symbol') == symbol_filter]
         return jsonify({"positions": filtered_positions, "symbol": symbol_filter, "total": len(filtered_positions)})
     
@@ -456,7 +456,7 @@ def get_trade_history_api():
     fresh = request.args.get('fresh', '0') == '1'
     trades = logic.get_trade_history(current_user.id, force_refresh=fresh)
     symbol_filter = request.args.get('symbol', '').strip().upper()
-    if symbol_filter:
+    if symbol_filter and symbol_filter.strip():
         trades = [t for t in trades if isinstance(t, dict) and t.get('symbol') == symbol_filter]
     return jsonify({"trades": trades})
 
@@ -725,9 +725,9 @@ def index():
         # Invalidate position and trade history caches so next page load is always fresh
         logic._positions_cache.pop(f"positions_{current_user.id}", None)
         logic._positions_cache_time.pop(f"positions_{current_user.id}", None)
-        logic._trade_history_cache.pop(current_user.id, None)
-        logic._trade_history_cache_time.pop(current_user.id, None)
-        return redirect(url_for("index"))
+        logic._trade_history_cache.pop(f"trade_history_{current_user.id}", None)
+        logic._trade_history_cache_time.pop(f"trade_history_{current_user.id}", None)
+        return redirect(url_for("index", symbol=selected_symbol))
 
     return render_template(
         "index.html",
@@ -961,7 +961,7 @@ def update_sl_api():
 @login_required
 @subscription_required
 def download_trades():
-    trades = logic.get_trade_history(current_user.id)
+    trades = logic.get_trade_history(current_user.id, force_refresh=True)
     
     output = io.StringIO()
     writer = csv.writer(output)
