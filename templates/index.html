@@ -44,9 +44,10 @@
         }
         .chart-section {
             display: flex;
-            flex: 1 1 0;
+            flex: 2 1 0;
             padding: 4px;
             overflow: hidden;
+            min-height: 300px;
         }
         .dashboard-chart {
             width: 100%;
@@ -71,12 +72,13 @@
             padding: 7px 9px;
             display: flex;
             flex-direction: column;
-            min-height: 0;
+            min-height: 200px;
+            flex: 1 1 0;
         }
         .positions-scroll {
             flex: 1 1 auto;
             min-height: 0;
-            overflow: hidden;
+            overflow-y: auto;
             padding-right: 2px;
         }
         .dashboard-bottom-row {
@@ -287,9 +289,6 @@
             background: #cc0000;
         }
         @media (max-height: 920px) {
-            .chart-section {
-                flex-basis: auto;
-            }
             .dashboard-chart {
                 min-height: 0;
             }
@@ -297,9 +296,6 @@
         @media (max-height: 760px) {
             .dashboard-right {
                 gap: 6px;
-            }
-            .chart-section {
-                flex-basis: auto;
             }
             .dashboard-chart {
                 min-height: 0;
