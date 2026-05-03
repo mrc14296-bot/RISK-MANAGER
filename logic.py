@@ -557,6 +557,16 @@ def get_open_orders_for_symbol(symbol, user_id=None):
     except Exception:
         return []
 
+def cancel_open_order(symbol, order_id, user_id=None):
+    try:
+        client = get_client(user_id)
+        if not client:
+            return {"success": False, "message": "No exchange connection"}
+        client.futures_cancel_order(symbol=symbol, orderId=order_id, recvWindow=10000)
+        return {"success": True, "message": f"Order {order_id} cancelled"}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+
 def get_all_open_conditional_orders(user_id=None):
     try:
         client = get_client(user_id)
@@ -1239,21 +1249,6 @@ def execute_trade_action(balance, symbol, side, entry, order_type, sl_type, sl_v
                             "side": x_side,
                             "type": "TAKE_PROFIT_MARKET",
                             "stopPrice": tp2_price,
-                            "closePosition": True,
-                            "workingType": "MARK_PRICE",
-                        },
-                        {
-                            "symbol": symbol,
-                            "side": x_side,
-                            "type": "TAKE_PROFIT_MARKET",
-                            "stopPrice": tp2_price,
-                            "closePosition": True,
-                        },
-                        {
-                            "symbol": symbol,
-                            "side": x_side,
-                            "type": "TAKE_PROFIT_MARKET",
-                            "stopPrice": tp2_price,
                             "quantity": tp2_qty,
                             "reduceOnly": True,
                             "workingType": "MARK_PRICE",
@@ -1265,6 +1260,21 @@ def execute_trade_action(balance, symbol, side, entry, order_type, sl_type, sl_v
                             "stopPrice": tp2_price,
                             "quantity": tp2_qty,
                             "reduceOnly": True,
+                        },
+                        {
+                            "symbol": symbol,
+                            "side": x_side,
+                            "type": "TAKE_PROFIT_MARKET",
+                            "stopPrice": tp2_price,
+                            "closePosition": True,
+                            "workingType": "MARK_PRICE",
+                        },
+                        {
+                            "symbol": symbol,
+                            "side": x_side,
+                            "type": "TAKE_PROFIT_MARKET",
+                            "stopPrice": tp2_price,
+                            "closePosition": True,
                         },
                         {
                             "symbol": symbol,
