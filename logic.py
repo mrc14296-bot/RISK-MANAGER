@@ -565,14 +565,25 @@ def get_all_open_conditional_orders(user_id=None):
             return []
         
         # Fetch all open orders for the account
+        # Use a large recvWindow to prevent timestamp issues
         all_orders = client.futures_get_open_orders(recvWindow=10000)
         
-        conditional_types = ['STOP', 'STOP_MARKET', 'TAKE_PROFIT', 'TAKE_PROFIT_MARKET', 'TRAILING_STOP_MARKET']
+        # Comprehensive list of conditional/trigger order types
+        conditional_types = [
+            'STOP', 'STOP_MARKET', 
+            'TAKE_PROFIT', 'TAKE_PROFIT_MARKET', 
+            'TRAILING_STOP_MARKET',
+            'STOP_LOSS', 'STOP_LOSS_LIMIT',
+            'TAKE_PROFIT_LIMIT'
+        ]
         
         conditional_orders = []
         for o in all_orders:
-            o_type = o.get('type')
-            if o_type in conditional_types:
+            o_type = o.get('type', '').upper()
+            # Also include any order with a stopPrice > 0 as it's a conditional trigger order
+            has_stop_price = float(o.get('stopPrice', 0)) > 0
+            
+            if o_type in conditional_types or has_stop_price:
                 conditional_orders.append({
                     'orderId': o.get('orderId'),
                     'symbol': o.get('symbol'),

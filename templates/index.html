@@ -836,6 +836,8 @@
                 
                 // Also fetch LIVE liquidation prices (no cache) every 2 seconds for real-time updates
                 updateLiveDataOnly();
+                // ✅ Auto-refresh conditional orders when positions update
+                updateConditionalOrders();
             }
             renderPositions();
         }).catch(() => {
@@ -1030,8 +1032,8 @@
                             <div style="color: #ffaa00; font-size: 9px; margin-bottom: 4px; font-weight: bold;">${typeLabel}</div>
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-bottom: 6px; color: #aaa; font-size: 9px;">
                                 <div>Qty: <span style="color: #fff;">${o.origQty}</span></div>
-                                <div>Stop: <span style="color: #fff;">$${o.stopPrice.toFixed(4)}</span></div>
-                            </div>
+	                                <div>Stop: <span style="color: #fff;">$${o.stopPrice > 0 ? o.stopPrice.toFixed(4) : (o.price > 0 ? o.price.toFixed(4) : '0.0000')}</span></div>
+	                            </div>
                             <div style="display: flex; justify-content: space-between; align-items: center;">
                                 <span style="color: #555; font-size: 8px;">${o.time}</span>
                                 <button onclick="cancelOrder('${o.symbol}', '${o.orderId}')" style="background: #cc0000; color: #fff; border: none; padding: 2px 8px; border-radius: 3px; cursor: pointer; font-size: 9px; font-weight: bold;">Cancel</button>
