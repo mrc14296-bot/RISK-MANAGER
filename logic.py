@@ -1858,6 +1858,9 @@ def get_live_price(symbol, user_id=None):
             print(f"   → Trying public endpoint: {endpoint}")
             response = requests.get(endpoint, timeout=5, proxies=proxies)
             data = response.json()
+            # Handle both single ticker and list responses
+            if isinstance(data, list):
+                data = data[0] if len(data) > 0 else {}
             price = float(data.get('price', 0))
             if price > 0:
                 _price_cache[cache_key] = price
@@ -1867,6 +1870,29 @@ def get_live_price(symbol, user_id=None):
         except Exception as e:
             print(f"   ⚠️ Public API {endpoint} failed: {e}")
             continue
+
+    # ✅ ATTEMPT 2b: CoinGecko public API fallback (no API key needed)
+    COINGECKO_MAP = {
+        'BTCUSDT': 'bitcoin', 'ETHUSDT': 'ethereum', 'BNBUSDT': 'binancecoin',
+        'SOLUSDT': 'solana', 'XRPUSDT': 'ripple', 'ADAUSDT': 'cardano',
+        'DOGEUSDT': 'dogecoin', 'LINKUSDT': 'chainlink', 'LTCUSDT': 'litecoin',
+        'MATICUSDT': 'matic-network', 'AVAXUSDT': 'avalanche-2', 'DOTUSDT': 'polkadot'
+    }
+    coin_id = COINGECKO_MAP.get(symbol)
+    if coin_id:
+        try:
+            print(f"   → Trying CoinGecko fallback for {symbol}...")
+            cg_url = f"https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd"
+            cg_response = requests.get(cg_url, timeout=5)
+            cg_data = cg_response.json()
+            price = float(cg_data.get(coin_id, {}).get('usd', 0))
+            if price > 0:
+                _price_cache[cache_key] = price
+                _price_cache_time[cache_key] = current_time
+                print(f"✅ GOT PRICE FROM COINGECKO: {symbol} = ${price}")
+                return price
+        except Exception as e:
+            print(f"   ⚠️ CoinGecko fallback failed: {e}")
             
     # ✅ ATTEMPT 3: Last resort - use stale cache if available
     if cache_key in _price_cache:
