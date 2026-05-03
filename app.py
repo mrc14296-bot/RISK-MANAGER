@@ -1025,6 +1025,33 @@ def test_binance():
     except Exception as e:
         return f"❌ Connection Error: {str(e)}"
 
+@app.route('/api/change_leverage', methods=['POST'])
+@login_required
+def change_leverage():
+    """API endpoint to change leverage for a specific symbol"""
+    try:
+        data = request.get_json()
+        symbol = data.get('symbol')
+        leverage = data.get('leverage')
+        
+        if not symbol or not leverage:
+            return jsonify({"success": False, "error": "Missing symbol or leverage"}), 400
+            
+        client = logic.get_user_exchange_client(current_user.id)
+        if not client:
+            return jsonify({"success": False, "error": "Exchange connection not found"}), 404
+            
+        # Change leverage on Binance
+        client.futures_change_leverage(symbol=symbol, leverage=int(leverage))
+        
+        # Log the event
+        logic.log_trade_event(current_user.id, f"⚡ Leverage for {symbol} changed to {leverage}x", "LEVERAGE_CHANGE")
+        
+        return jsonify({"success": True, "message": f"Leverage for {symbol} changed to {leverage}x"})
+    except Exception as e:
+        print(f"Error changing leverage: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()

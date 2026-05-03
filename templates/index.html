@@ -565,26 +565,26 @@
                 <div id="warning-list"></div>
             </div>
 
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2px; padding: 2px 0 0 0; margin: 0;">
-                <div class="dashboard-card positions-card" style="padding: 5px; display: flex; flex-direction: column; min-height: 0; border: 1px solid #0ca7d4; background: #0b0f12; border-radius: 3px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin: 0 0 2px 0; border-bottom: 1px solid #0ca7d4; padding: 0 0 2px 0;">
-                        <h3 style="color: #00d4ff; margin: 0; font-size: 9px; font-weight: bold;" id="position_header">📍 POS (0)</h3>
-                        <button type="button" onclick="closeAllPositions()" aria-label="Close all open positions" style="background: #cc0000; color: #fff; border: none; padding: 1px 5px; border-radius: 2px; cursor: pointer; font-size: 7px; font-weight: bold; transition: all 0.2s;">Close</button>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px 0 0 0; margin: 0; flex: 1; min-height: 0;">
+                <div class="dashboard-card positions-card" style="padding: 8px; display: flex; flex-direction: column; min-height: 0; border: 1px solid #0ca7d4; background: #0b0f12; border-radius: 6px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin: 0 0 6px 0; border-bottom: 1px solid #0ca7d4; padding: 0 0 4px 0;">
+                        <h3 style="color: #00d4ff; margin: 0; font-size: 11px; font-weight: bold;" id="position_header">📍 LIVE POSITIONS (0)</h3>
+                        <button type="button" onclick="closeAllPositions()" aria-label="Close all open positions" style="background: #cc0000; color: #fff; border: none; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 9px; font-weight: bold; transition: all 0.2s;">Close All</button>
                     </div>
 
-                    <div id="live_positions" class="positions-scroll" style="max-height: 135px; overflow-y: auto; flex: 1; min-height: 0; font-size: 8px; margin: 0; padding: 0 2px;">
-                        <div style="text-align: center; color: #555; padding: 18px 2px; font-size: 8px;">No open positions yet</div>
+                    <div id="live_positions" class="positions-scroll" style="overflow-y: auto; flex: 1; min-height: 0; font-size: 9px; margin: 0; padding: 0 4px;">
+                        <div style="text-align: center; color: #555; padding: 40px 2px; font-size: 10px;">No open positions yet<br><small style="color: #444;">Place a trade to see live position details</small></div>
                     </div>
                 </div>
 
-                <div class="dashboard-card recent-trades-card" style="padding: 5px; display: flex; flex-direction: column; min-height: 0; border: 1px solid #0ca7d4; background: #0b0f12; border-radius: 3px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin: 0 0 2px 0; border-bottom: 1px solid #0ca7d4; padding: 0 0 2px 0;">
-                        <h3 style="color: #00d4ff; margin: 0; font-size: 9px; font-weight: bold;">📊 TRADES</h3>
-                        <a href="/download_trades" style="color: #0ca7d4; text-decoration: none; font-weight: bold; font-size: 7px;">CSV</a>
+                <div class="dashboard-card recent-trades-card" style="padding: 8px; display: flex; flex-direction: column; min-height: 0; border: 1px solid #0ca7d4; background: #0b0f12; border-radius: 6px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin: 0 0 6px 0; border-bottom: 1px solid #0ca7d4; padding: 0 0 4px 0;">
+                        <h3 style="color: #00d4ff; margin: 0; font-size: 11px; font-weight: bold;">📊 TRADES</h3>
+                        <a href="/download_trades" style="color: #0ca7d4; text-decoration: none; font-weight: bold; font-size: 9px; background: rgba(12, 167, 212, 0.1); padding: 2px 6px; border-radius: 3px; border: 1px solid rgba(12, 167, 212, 0.3);">CSV Export</a>
                     </div>
 
-                    <div id="trade_history" class="trade-history-box" style="max-height: 135px; overflow-y: auto; flex: 1; min-height: 0; background: #000; border: 1px solid #1a3a45; border-radius: 3px; padding: 2px; font-family: monospace; font-size: 7px; line-height: 1.3; margin: 0;">
-                        <div style="text-align: center; color: #444; padding: 18px 0; font-size: 8px;">Loading trades...</div>
+                    <div id="trade_history" class="trade-history-box" style="overflow-y: auto; flex: 1; min-height: 0; background: #000; border: 1px solid #1a3a45; border-radius: 4px; padding: 4px; font-family: monospace; font-size: 9px; line-height: 1.4; margin: 0;">
+                        <div style="text-align: center; color: #444; padding: 40px 0; font-size: 10px;">Loading trades...</div>
                     </div>
                 </div>
             </div>
@@ -699,67 +699,7 @@
           });
         </script>
 
-        <div class="dashboard-card coin-analysis-card">
-            <div class="coin-analysis-header">
-                <div>
-                    <h3 class="coin-analysis-title">Analysis - <span id="embed-modal-symbol" style="color: #00ff88;">{{ selected_symbol or 'BTCUSDT' }}</span></h3>
-                    <p class="coin-analysis-subtitle">Compact live trade snapshot</p>
-                </div>
-                <div class="analysis-badge">Auto Refresh</div>
-            </div>
-
-            <div class="coin-analysis-body">
-                <div class="analysis-grid">
-                    <div class="analysis-metric">
-                        <p class="analysis-metric-label">PnL</p>
-                        <p class="analysis-metric-value" id="embed-pnl">0.00</p>
-                    </div>
-                    <div class="analysis-metric">
-                        <p class="analysis-metric-label">ROI</p>
-                        <p class="analysis-metric-value" id="embed-roi">0.00%</p>
-                    </div>
-                </div>
-
-                <div class="analysis-grid">
-                    <div class="analysis-metric warm">
-                        <p class="analysis-metric-label">Size</p>
-                        <p class="analysis-metric-value" id="embed-size">0.00</p>
-                    </div>
-                    <div class="analysis-metric">
-                        <p class="analysis-metric-label">Margin</p>
-                        <p class="analysis-metric-value" id="embed-margin">0.00</p>
-                    </div>
-                </div>
-
-                <div class="analysis-grid analysis-single">
-                    <div class="analysis-metric danger">
-                        <p class="analysis-metric-label">Ratio</p>
-                        <p class="analysis-metric-value" id="embed-margin-ratio">0.00%</p>
-                    </div>
-                </div>
-
-                <div class="analysis-grid analysis-prices">
-                    <div class="analysis-metric">
-                        <p class="analysis-metric-label">Entry</p>
-                        <p class="analysis-metric-value price" id="embed-entry">-</p>
-                    </div>
-                    <div class="analysis-metric">
-                        <p class="analysis-metric-label">Mark</p>
-                        <p class="analysis-metric-value price" id="embed-mark">-</p>
-                    </div>
-                    <div class="analysis-metric danger">
-                        <p class="analysis-metric-label">Liq.</p>
-                        <p class="analysis-metric-value price" id="embed-liq">-</p>
-                    </div>
-                </div>
-
-                <div class="analysis-actions">
-                    <button type="button" class="analysis-action-btn action-leverage" onclick="editLeverageMod()">Lev</button>
-                    <button type="button" class="analysis-action-btn action-tpsl" onclick="editTPSLMod()">TP / SL</button>
-                    <button type="button" class="analysis-action-btn action-close" onclick="closePosModal()">Close</button>
-                </div>
-            </div>
-        </div>
+<!-- ANALYSIS SECTION REMOVED AS PER USER REQUEST -->
     </div>
 </div>
 
@@ -938,7 +878,10 @@
                     <div style="border: 1px solid #333; padding: 12px; margin-bottom: 10px; border-radius: 6px; background: rgba(10, 10, 10, 0.5);">
                         <div style="display: flex; justify-content: space-between; margin-bottom: 10px; border-bottom: 1px solid #333; padding-bottom: 8px;">
                             <span style="font-weight: bold; color: ${pos.side === 'LONG' ? '#00ff88' : '#ff4444'}; font-size: 12px;">${pos.symbol} <span style="font-size: 10px; color: #888;">${pos.side}</span></span>
-                            <small style="color: #888; font-size: 9px;">${pos.leverage}x Leverage</small>
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <small style="color: #888; font-size: 9px;">${pos.leverage}x Leverage</small>
+                                <button onclick="editLeverageMod('${pos.symbol}')" style="background: linear-gradient(135deg, #ffbf3f 0%, #ff8a00 100%); color: #081017; border: none; padding: 1px 6px; border-radius: 3px; cursor: pointer; font-size: 8px; font-weight: bold; text-transform: uppercase;">Lev</button>
+                            </div>
                         </div>
                         
                         <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-bottom: 8px; font-size: 9px;">
@@ -2245,15 +2188,34 @@
         }
     }
 
-    // ✅ EDIT LEVERAGE FROM MODAL
-    function editLeverageMod() {
-        const symbol = document.getElementById('modal-symbol').textContent;
+    // ✅ EDIT LEVERAGE FROM LIVE POSITIONS
+    function editLeverageMod(symbolOverride = null) {
+        const symbol = symbolOverride || (document.getElementById('modal-symbol') ? document.getElementById('modal-symbol').textContent : getSelectedSymbol());
         const newLeverage = prompt(`Enter new leverage for ${symbol} (1-125x):`);
         if (newLeverage && !isNaN(newLeverage)) {
             const lev = parseInt(newLeverage);
             if (lev >= 1 && lev <= 125) {
-                alert(`✅ Would change ${symbol} leverage to ${lev}x. (Integration needed)`);
-                // TODO: Add API call to change leverage
+                // Show loading state
+                console.log(`Changing leverage for ${symbol} to ${lev}x...`);
+                
+                fetch('/api/change_leverage', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ symbol: symbol, leverage: lev })
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        alert(`✅ Successfully changed ${symbol} leverage to ${lev}x`);
+                        updateLivePositions(symbol, true); // Refresh positions
+                    } else {
+                        alert(`❌ Failed to change leverage: ${data.error || 'Unknown error'}`);
+                    }
+                })
+                .catch(err => {
+                    console.error('Leverage change error:', err);
+                    alert('❌ Error changing leverage. Check console for details.');
+                });
             } else {
                 alert('❌ Leverage must be between 1-125x');
             }
