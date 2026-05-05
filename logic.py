@@ -1250,16 +1250,18 @@ def execute_trade_action(balance, symbol, side, entry, order_type, sl_type, sl_v
 
                 if tp2_qty > 0:
                     tp2_price = round_price(symbol, tp2, user_id)
-                    # TP2 is a Basic order (LIMIT or TAKE_PROFIT_MARKET with explicit quantity)
+                    # TP2 uses TAKE_PROFIT/TAKE_PROFIT_MARKET with explicit remaining quantity (never closePosition)
                     tp2_variants = [
                         {
                             "symbol": symbol,
                             "side": x_side,
-                            "type": "LIMIT",
+                            "type": "TAKE_PROFIT",
+                            "stopPrice": tp2_price,
                             "price": tp2_price,
                             "quantity": tp2_qty,
-                            "timeInForce": "GTC",
                             "reduceOnly": True,
+                            "timeInForce": "GTC",
+                            "workingType": "MARK_PRICE",
                         },
                         {
                             "symbol": symbol,
@@ -1269,6 +1271,16 @@ def execute_trade_action(balance, symbol, side, entry, order_type, sl_type, sl_v
                             "quantity": tp2_qty,
                             "reduceOnly": True,
                             "workingType": "MARK_PRICE",
+                        },
+                        {
+                            "symbol": symbol,
+                            "side": x_side,
+                            "type": "TAKE_PROFIT",
+                            "stopPrice": tp2_price,
+                            "price": tp2_price,
+                            "quantity": tp2_qty,
+                            "reduceOnly": True,
+                            "timeInForce": "GTC",
                         },
                     ]
                     tp2_created, tp2_order, tp2_error = _create_order_with_fallbacks(tp2_variants)
@@ -1865,22 +1877,7 @@ def get_live_price(symbol, user_id=None):
             print(f"   ⚠️ Public API {endpoint} failed: {e}")
             continue
 
-    # ✅ ATTEMPT 3: Binance Spot API Fallback (Public)
-    try:
-        print(f"   → Trying Binance Spot API fallback for {symbol}...")
-        spot_url = f"https://api.binance.com/api/v3/ticker/price?symbol={symbol}"
-        spot_response = requests.get(spot_url, timeout=5, proxies=proxies)
-        spot_data = spot_response.json()
-        price = float(spot_data.get('price', 0))
-        if price > 0:
-            _price_cache[cache_key] = price
-            _price_cache_time[cache_key] = current_time
-            print(f"✅ GOT PRICE FROM BINANCE SPOT API: {symbol} = ${price}")
-            return price
-    except Exception as e:
-        print(f"   ⚠️ Binance Spot API failed for {symbol}: {e}")
-
-    # ✅ ATTEMPT 4: CoinGecko public API fallback (no API key needed)
+    # ✅ ATTEMPT 2b: CoinGecko public API fallback (no API key needed)
     COINGECKO_MAP = {
         'BTCUSDT': 'bitcoin', 'ETHUSDT': 'ethereum', 'BNBUSDT': 'binancecoin',
         'SOLUSDT': 'solana', 'XRPUSDT': 'ripple', 'ADAUSDT': 'cardano',
