@@ -596,7 +596,7 @@
             <div id="tv_chart" class="dashboard-chart"></div>
         </div>
 
-    <div class="dashboard-card positions-card" style="padding: 8px; display: flex; flex-direction: column; border: 1px solid #0ca7d4; background: #0b0f12; border-radius: 6px;">
+    <div class="dashboard-card positions-card" style="padding: 8px; display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; border: 1px solid #0ca7d4; background: #0b0f12; border-radius: 6px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin: 0 0 6px 0; border-bottom: 1px solid #0ca7d4; padding: 0 0 4px 0;">
             <h3 style="color: #00d4ff; margin: 0; font-size: 11px; font-weight: bold;" id="position_header">📍 LIVE POSITIONS (0)</h3>
             <button type="button" onclick="closeAllPositions()" aria-label="Close all open positions" style="background: #cc0000; color: #fff; border: none; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 9px; font-weight: bold; transition: all 0.2s;">Close All</button>
@@ -1012,7 +1012,7 @@
         });
     }
 
-                function updateConditionalOrders() {
+    function updateConditionalOrders() {
         const container = document.getElementById('conditional_orders');
         const header = document.getElementById('conditional_header');
         if (!container) return;
@@ -1020,7 +1020,10 @@
         fetch('/api/conditional_orders')
         .then(r => r.json())
         .then(data => {
-            const orders = Array.isArray(data.orders) ? data.orders : [];
+            // API returns conditional_orders (algo/TP1) and basic_orders (SL/TP2/regular)
+            const conditionalOrders = Array.isArray(data.conditional_orders) ? data.conditional_orders : [];
+            const basicOrders = Array.isArray(data.basic_orders) ? data.basic_orders : [];
+            const orders = [...conditionalOrders, ...basicOrders];
             if (header) header.textContent = 'CONDITIONAL ORDERS (' + orders.length + ')';
 
             if (orders.length > 0) {
@@ -1041,7 +1044,7 @@
                     html += '</div>';
                     html += '<div style="display: flex; justify-content: space-between; align-items: center;">';
                     html += '<span style="color: #555; font-size: 8px;">' + o.time + '</span>';
-                    html += '<button onclick="cancelOrder('' + o.symbol + '', '' + o.orderId + '')" style="background: #cc0000; color: #fff; border: none; padding: 2px 8px; border-radius: 3px; cursor: pointer; font-size: 9px; font-weight: bold;">Cancel</button>';
+                    html += "<button onclick=\"cancelOrder('" + o.symbol + "', '" + o.orderId + "')\" style=\"background: #cc0000; color: #fff; border: none; padding: 2px 8px; border-radius: 3px; cursor: pointer; font-size: 9px; font-weight: bold;\">Cancel</button>";
                     html += '</div>';
                     html += '</div>';
                 });
@@ -1284,75 +1287,6 @@
         return confirm(message);
     }
 
-    function updateLivePrice(symbolOverride = null, forceRestart = false) {
-        const symbolSelect = document.querySelector('select[name="symbol"]');
-        const symbol = (symbolOverride || (symbolSelect ? symbolSelect.value : '') || '').trim().toUpperCase();
-        
-        // ✅ DEFENSIVE: Never switch to another coin automatically
-        if (!symbol || symbol === '') {
-            console.warn('⚠️ No symbol found in dropdown, skipping live price refresh');
-            return;
-        }
-        
-        const entryInput = document.getElementById('entry_input');
-        const indicator = document.getElementById('live-indicator');
-        const resetBtn = document.getElementById('reset-live-btn');
-        
-        if (!entryInput) {
-            console.error('❌ Entry input element not found');
-            return;
-        }
-        
-        console.log(`📡 Fetching live price for: ${symbol}`);
-        
-        fetch(`/get_live_price/${encodeURIComponent(symbol)}`)
-        .then(r => r.json())
-        .then(data => {
-            if (data.price && data.price > 0) {
-                const activeSymbol = symbolSelect ? (symbolSelect.value || '').trim().toUpperCase() : '';
-                if (activeSymbol !== symbol) {
-                    console.log(`ℹ️ Ignoring stale price response for ${symbol}; active symbol is ${activeSymbol}`);
-                    return;
-                }
-
-                const oldValue = parseFloat(entryInput.value) || 0;
-                const lastPriceSymbol = (entryInput.dataset.liveSymbol || '').trim().toUpperCase();
-                const symbolChanged = lastPriceSymbol !== symbol;
-                // ✅ Only update if price is different (avoid unnecessary updates)
-                if (symbolChanged || Math.abs(oldValue - data.price) / Math.max(oldValue, data.price) > 0.01 || oldValue === 0) {
-                    entryInput.value = data.price;
-                    entryInput.dataset.liveSymbol = symbol;
-                    
-                    // Visual feedback
-                    if (indicator) {
-                        indicator.style.display = 'inline-block';
-                    }
-                    if (entryInput.style) {
-                        entryInput.style.background = '#1a1a2e';
-                        entryInput.style.transition = 'background 0.3s';
-                    }
-                    
-                    setTimeout(() => {
-                        if (indicator) indicator.style.display = 'none';
-                        if (entryInput.style) entryInput.style.background = '';
-                    }, 2000);
-                    
-                    console.log(`✅ Live price updated: ${symbol} ${oldValue.toFixed(4)} → ${data.price.toFixed(4)}`);
-                } else {
-                    entryInput.dataset.liveSymbol = symbol;
-                }
-            } else {
-                console.warn(`⚠️ Invalid price received for ${symbol}: ${data.price}`);
-            }
-        }).catch(err => {
-            console.error(`❌ Live price fetch failed for ${symbol}:`, err);
-            if (resetBtn) {
-                resetBtn.textContent = '❌';
-                setTimeout(() => resetBtn.textContent = '🔄 Live', 1000);
-            }
-        });
-    }
-
 
     updateLivePrice = function(symbolOverride = null, forceRestart = false) {
         const symbolSelect = document.querySelector('select[name="symbol"]');
@@ -1587,7 +1521,6 @@
     let priceWs = null;
     let priceWsSymbol = '';
     let lastPriceMessageAt = 0;
-    let restPollingInterval = null;
 
     // ✅ HYBRID APPROACH: Form reload for chart (reliable) + dynamic updates for data (fast)
     function isValidSymbol(symbol) {
@@ -1764,7 +1697,7 @@
                     priceWs.close();
                     fetchLivePriceViaREST(targetSymbol, entryInput, indicator);
                 }
-            }, 5000);
+            }, 3000);
         };
 
         priceWs.onmessage = (event) => {
@@ -1929,20 +1862,6 @@
                             indicator.style.color = '';
                             indicator.textContent = '🔄 Live Price';
                         }, 2000);
-                    }
-
-                    // ✅ FIX C: Start REST polling if not already running
-                    if (!restPollingInterval) {
-                        console.log(`⏱️ Starting REST polling interval for ${symbol}`);
-                        restPollingInterval = setInterval(() => {
-                            if (getSelectedSymbol() === symbol.toUpperCase() && (!priceWs || priceWs.readyState !== WebSocket.OPEN)) {
-                                fetchLivePriceViaREST(symbol, entryInput, indicator);
-                            } else {
-                                console.log(`🛑 Stopping REST polling for ${symbol}`);
-                                clearInterval(restPollingInterval);
-                                restPollingInterval = null;
-                            }
-                        }, 5000);
                     }
                 } else {
                     console.error(`❌ [fetchLivePriceViaREST] Invalid price: ${data.price}`);
@@ -2499,15 +2418,11 @@
             updateLivePositions();
             updateTradeHistory();
             refreshSelectedSymbolPanels(getSelectedSymbol() || '{{ selected_symbol or "BTCUSDT" }}', true);
-            // ✅ FIX D: Ensure updateLivePrice is called on page load
-            setTimeout(() => updateLivePrice(), 500);
         });
     } else {
         updateLivePositions();
         updateTradeHistory();
         refreshSelectedSymbolPanels(getSelectedSymbol() || '{{ selected_symbol or "BTCUSDT" }}', true);
-        // ✅ FIX D: Ensure updateLivePrice is called on page load
-        setTimeout(() => updateLivePrice(), 500);
     }
 
     // ✅ AUTO-REFRESH TIMERS (Background updates while user trades)
@@ -2580,4 +2495,4 @@
     </div>
 </div>
 </body>
-</html>
+    </html>
