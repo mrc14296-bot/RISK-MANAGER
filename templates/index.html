@@ -606,14 +606,7 @@
         </div>
     </div>
 
-        <div class="dashboard-card" style="padding:6px; margin-top:6px; flex-shrink:0;">
-        <div style="padding: 6px 8px; border-bottom: 1px solid rgba(12,167,212,0.4); display:flex; justify-content:space-between; align-items:center;">
-            <span id="conditional_header" style="color:#e9fbff; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.04em;">CONDITIONAL ORDERS (0)</span>
-        </div>
-        <div id="conditional_orders" style="padding: 6px; overflow-y: auto; flex: 1 1 auto; min-height: 0;">
-            <div style="text-align: center; color: #444; padding: 40px 0; font-size: 10px;">No conditional orders</div>
-        </div>
-    </div><script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+<script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
         <script type="text/javascript">
           let tvWidget = null;
           // ✅ FIXED: currentChartSymbol tracks the ACTIVE symbol for the chart
@@ -1013,8 +1006,8 @@
     }
 
     function updateConditionalOrders() {
-        const container = document.getElementById('conditional_orders');
-        const header = document.getElementById('conditional_header');
+        const container = document.getElementById('conditional_orders_left');
+        const header = document.getElementById('conditional_header_left');
         if (!container) return;
 
         fetch('/api/conditional_orders')
