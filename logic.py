@@ -593,9 +593,8 @@ def get_all_open_conditional_orders(user_id=None):
             has_stop_price = float(o.get('stopPrice', 0)) > 0
             has_activate_price = float(o.get('activatePrice', 0)) > 0
 
-            is_reduce_only = o.get('reduceOnly', False) is True or str(o.get('reduceOnly', '')).lower() == 'true'
-            if o_type in conditional_types or has_stop_price or has_activate_price or is_reduce_only:
-                label = 'SL' if 'STOP' in o_type else ('TP' if 'TAKE_PROFIT' in o_type or o_type == 'LIMIT' and is_reduce_only else ('Trail SL' if 'TRAILING' in o_type else o_type))
+            if o_type in conditional_types or has_stop_price or has_activate_price:
+                label = 'SL' if 'STOP' in o_type else ('TP' if 'TAKE_PROFIT' in o_type else ('Trail SL' if 'TRAILING' in o_type else o_type))
                 oid = str(o.get('orderId', ''))
                 if oid not in seen_ids:
                     seen_ids.add(oid)
@@ -659,26 +658,6 @@ def get_all_open_conditional_orders(user_id=None):
 
         # Sort by time descending
         conditional_orders.sort(key=lambda x: x['time'], reverse=True)
-
-        # Relabel TP orders as TP1/TP2 per symbol based on price proximity to entry
-        # Group all TP-labelled orders by symbol, sort by stopPrice/price ascending for SELL (LONG tp)
-        # or descending for BUY (SHORT tp), then assign TP1, TP2
-        from collections import defaultdict
-        tp_by_symbol = defaultdict(list)
-        for o in conditional_orders:
-            if o.get('label') == 'TP':
-                tp_by_symbol[o['symbol']].append(o)
-        for sym, tp_orders in tp_by_symbol.items():
-            # side of first order tells us direction
-            sell_side = tp_orders[0]['side'] == 'SELL'  # LONG position closes with SELL
-            effective_price = lambda o: o['stopPrice'] if o['stopPrice'] > 0 else o['price']
-            # LONG (SELL side tp): TP1 is the lower price, TP2 is higher
-            # SHORT (BUY side tp): TP1 is the higher price, TP2 is lower
-            tp_sorted = sorted(tp_orders, key=effective_price, reverse=not sell_side)
-            labels = ['TP1', 'TP2', 'TP3']
-            for idx, o in enumerate(tp_sorted):
-                o['label'] = labels[idx] if idx < len(labels) else ('TP' + str(idx + 1))
-
         return conditional_orders
 
     except Exception as e:
@@ -1465,6 +1444,30 @@ def close_position(symbol, user_id=None):
         side = Client.SIDE_SELL if float(pos.get('positionAmt', 0)) > 0 else Client.SIDE_BUY
         client.futures_create_order(symbol=symbol, side=side, type="MARKET", quantity=amt)
         client.futures_cancel_all_open_orders(symbol=symbol)
+        # Also cancel any open algo orders for this symbol (TP1 lives here)
+        # futures_cancel_all_open_orders does NOT touch algo orders
+        try:
+            algo_resp = None
+            if hasattr(client, 'futures_get_algo_orders'):
+                algo_resp = client.futures_get_algo_orders(recvWindow=10000)
+            elif hasattr(client, '_request_futures_api'):
+                algo_resp = client._request_futures_api('get', 'algoOrder/openOrders', True, data={'recvWindow': 10000})
+            if algo_resp is not None:
+                algo_orders = algo_resp if isinstance(algo_resp, list) else algo_resp.get('orders', [])
+                for ao in algo_orders:
+                    if ao.get('symbol') == symbol:
+                        algo_id = ao.get('algoId') or ao.get('orderId')
+                        if algo_id:
+                            try:
+                                if hasattr(client, 'futures_cancel_algo_order'):
+                                    client.futures_cancel_algo_order(algoId=algo_id)
+                                elif hasattr(client, '_request_futures_api'):
+                                    client._request_futures_api('delete', 'algoOrder', True, data={'algoId': algo_id})
+                                print(f"[DEBUG] Cancelled algo order {algo_id} for {symbol}")
+                            except Exception as _ae:
+                                print(f"[DEBUG] Algo order {algo_id} cancel skipped: {_ae}")
+        except Exception as _algo_ex:
+            print(f"[DEBUG] Algo orders cancel on close (non-fatal): {_algo_ex}")
         pos_db = TradePosition.query.filter_by(user_id=user_id, symbol=symbol, status='open').order_by(TradePosition.updated_at.desc()).first()
         if pos_db:
             pos_db.status = 'closed'
