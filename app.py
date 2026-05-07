@@ -1067,6 +1067,17 @@ def api_conditional_orders():
     basic = [o for o in orders if o.get('type', '').upper() not in CONDITIONAL_TYPES and o.get('source') != 'algo']
     return jsonify({"conditional_orders": conditional, "basic_orders": basic, "success": True})
 
+@app.route('/api/tp1_and_sl_orders')
+@login_required
+def api_tp1_and_sl_orders():
+    """
+    NEW ENDPOINT: Fetch ONLY TP1 and SL orders with position context.
+    This allows users to easily find and manually close TP1/SL orders after a trade closes.
+    """
+    from conditional_orders_enhancement import get_tp1_and_sl_orders
+    result = get_tp1_and_sl_orders(current_user.id)
+    return jsonify(result)
+
 @app.route('/api/cancel_conditional_order', methods=['POST'])
 @login_required
 def api_cancel_conditional_order():
