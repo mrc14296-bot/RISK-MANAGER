@@ -598,15 +598,25 @@ def get_all_open_conditional_orders(user_id=None):
                 oid = str(o.get('orderId', ''))
                 if oid not in seen_ids:
                     seen_ids.add(oid)
+                    # Improve labeling for TP1 and SL
+                    qty = float(o.get('origQty', 0))
+                    # Often TP1 is a specific quantity while SL is closePosition=True
+                    # We can also check against DB if needed, but label helps UI
+                    display_label = label
+                    if 'TAKE_PROFIT' in o_type:
+                        display_label = 'TP1'
+                    elif 'STOP' in o_type:
+                        display_label = 'SL'
+
                     conditional_orders.append({
                         'orderId': o.get('orderId'),
                         'symbol': o.get('symbol'),
                         'type': o_type,
-                        'label': label,
+                        'label': display_label,
                         'side': o.get('side'),
                         'stopPrice': float(o.get('stopPrice', 0)),
                         'price': float(o.get('price', 0)),
-                        'origQty': float(o.get('origQty', 0)),
+                        'origQty': qty,
                         'time': datetime.fromtimestamp(o.get('time', 0) / 1000).strftime('%Y-%m-%d %H:%M:%S'),
                         'reduceOnly': o.get('reduceOnly', False),
                         'source': 'regular'

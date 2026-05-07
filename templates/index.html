@@ -1141,6 +1141,7 @@
         .then(r => r.json())
         .then(data => {
             if (data.success) {
+                updateTP1SLOrders();
                 updateConditionalOrders();
             } else {
                 alert(`Error: ${data.error}`);
