@@ -834,8 +834,8 @@
                 
                 // Also fetch LIVE liquidation prices (no cache) every 2 seconds for real-time updates
                 updateLiveDataOnly();
-                // ✅ Auto-refresh conditional orders when positions update
-                updateConditionalOrders();
+                // ✅ Auto-refresh TP1/SL orders when positions update
+                updateTP1SLOrders();
             }
             renderPositions();
         }).catch(() => {
@@ -1176,7 +1176,7 @@
         .then(data => {
             if (data.success) {
                 updateTP1SLOrders();
-                updateConditionalOrders();
+                updateTP1SLOrders();
             } else {
                 alert(`Error: ${data.message || data.error || 'Unknown error'}`);
             }
@@ -1431,7 +1431,7 @@
             .then(r => r.json())
             .then(data => { alert(data.message || 'Closed'); })
             .then(updateLivePositions)
-            .then(() => setTimeout(updateConditionalOrders, 1500));
+            .then(() => setTimeout(updateTP1SLOrders, 1500));
         }
     }
 
@@ -1546,13 +1546,13 @@
         .then(r => r.json())
         .then(data => {
             alert(data.message || 'Order cancelled');
-            updateConditionalOrders();
+            updateTP1SLOrders();
         });
     }
     // Auto refresh intervals - OPTIMIZED for performance
     setInterval(updateLivePrice, 5000);     // Price 5s (was 1s - too frequent for external API)
     setInterval(updateLivePositions, 5000); // Positions 5s (was 10s - user wants faster refresh)
-    setInterval(updateConditionalOrders, 5000);
+    // setInterval(updateConditionalOrders) removed — updateTP1SLOrders handles the panel
     setInterval(updateLiveDataOnly, 2000);  // ✅ LIVE Liquidation Prices: 2s (real-time updates)
     setInterval(updateTradeHistory, 10000);  // History 10s (was 30s - user wants faster refresh)
     setInterval(updateTradeLimits, 10000);  // Limits 10s (unchanged - local data)
@@ -1591,7 +1591,7 @@
         setTimeout(() => {
             const sym = getSelectedSymbol() || '{{ selected_symbol or "BTCUSDT" }}';
             updateLivePositions(sym, true);
-            updateConditionalOrders();
+            updateTP1SLOrders();
             updateTradeHistory(sym);
             updateTradeLimits();
             updateLiveTradeLog();
@@ -2422,7 +2422,7 @@
         updatePositionSizing(activeSymbol);
         updateLivePositions(activeSymbol, forceFresh);
         updateTradeHistory(activeSymbol);
-        updateConditionalOrders();
+        updateTP1SLOrders();
         updateTradeLimits();
     }
 
@@ -2473,7 +2473,7 @@
             if (positions.length > 0) {
                 renderPositions();
                 updateLiveDataOnly();
-                updateConditionalOrders();
+                updateTP1SLOrders();
             } else {
                 currentPositions = {};
                 if (headerEl) {
@@ -2556,7 +2556,7 @@
     setInterval(updateTP1SLOrders, 5000);
     
     // Also refresh all conditional orders for backup
-    setInterval(updateConditionalOrders, 10000);
+    // setInterval(updateConditionalOrders) removed — updateTP1SLOrders at line above handles panel
 
     window.onclick = function(event) {
         const modal = document.getElementById('coin-details-modal');
@@ -3440,8 +3440,8 @@
                 
                 // Also fetch LIVE liquidation prices (no cache) every 2 seconds for real-time updates
                 updateLiveDataOnly();
-                // ✅ Auto-refresh conditional orders when positions update
-                updateConditionalOrders();
+                // ✅ Auto-refresh TP1/SL orders when positions update
+                updateTP1SLOrders();
             }
             renderPositions();
         }).catch(() => {
@@ -3707,7 +3707,7 @@
         .then(data => {
             if (data.success) {
                 updateTP1SLOrders();
-                updateConditionalOrders();
+                updateTP1SLOrders();
             } else {
                 alert(`Error: ${data.error}`);
             }
@@ -3962,7 +3962,7 @@
             .then(r => r.json())
             .then(data => { alert(data.message || 'Closed'); })
             .then(updateLivePositions)
-            .then(() => setTimeout(updateConditionalOrders, 1500));
+            .then(() => setTimeout(updateTP1SLOrders, 1500));
         }
     }
 
@@ -4077,7 +4077,7 @@
         .then(r => r.json())
         .then(data => {
             alert(data.message || 'Order cancelled');
-            updateConditionalOrders();
+            updateTP1SLOrders();
         });
     }
     // Auto refresh intervals - OPTIMIZED for performance
@@ -4121,7 +4121,7 @@
         setTimeout(() => {
             const sym = getSelectedSymbol() || '{{ selected_symbol or "BTCUSDT" }}';
             updateLivePositions(sym, true);
-            updateConditionalOrders();
+            updateTP1SLOrders();
             updateTradeHistory(sym);
             updateTradeLimits();
             updateLiveTradeLog();
@@ -4952,7 +4952,7 @@
         updatePositionSizing(activeSymbol);
         updateLivePositions(activeSymbol, forceFresh);
         updateTradeHistory(activeSymbol);
-        updateConditionalOrders();
+        updateTP1SLOrders();
         updateTradeLimits();
     }
 
@@ -5003,7 +5003,7 @@
             if (positions.length > 0) {
                 renderPositions();
                 updateLiveDataOnly();
-                updateConditionalOrders();
+                updateTP1SLOrders();
             } else {
                 currentPositions = {};
                 if (headerEl) {
@@ -5086,7 +5086,7 @@
     setInterval(updateTP1SLOrders, 5000);
     
     // Also refresh all conditional orders for backup
-    setInterval(updateConditionalOrders, 10000);
+    // setInterval(updateConditionalOrders) removed — updateTP1SLOrders at line above handles panel
 
     window.onclick = function(event) {
         const modal = document.getElementById('coin-details-modal');
@@ -5140,4 +5140,4 @@
 </html>
 </div>
 </body>
-</html>
+    </html>
