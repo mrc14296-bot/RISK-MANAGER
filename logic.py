@@ -587,8 +587,7 @@ def get_all_open_conditional_orders(user_id=None):
             'TAKE_PROFIT', 'TAKE_PROFIT_MARKET',
             'TRAILING_STOP_MARKET',
             'STOP_LOSS', 'STOP_LOSS_LIMIT',
-            'TAKE_PROFIT_LIMIT',
-            'LIMIT'  # Only if it has a stopPrice set
+            'TAKE_PROFIT_LIMIT'
         ]
 
         conditional_orders = []
