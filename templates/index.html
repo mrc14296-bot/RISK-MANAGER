@@ -2613,5 +2613,120 @@
         </button>
         </div>
     </div>
+<script>
+async function updateTP1SLOrders() {
+    try {
+        const res = await fetch('/api/tp1-sl-orders');
+        const data = await res.json();
+
+        const container = document.getElementById('conditional_orders_left');
+        const header = document.getElementById('conditional_header_left');
+
+        if (!data.success) {
+            container.innerHTML = `
+                <div style="color:red;padding:10px;">
+                    Failed to fetch orders
+                </div>
+            `;
+            return;
+        }
+
+        const tp1Orders = data.tp1_orders || [];
+        const slOrders = data.sl_orders || [];
+
+        const allOrders = [...tp1Orders, ...slOrders];
+
+        header.innerHTML = `🎯 TP1 & SL (${allOrders.length})`;
+
+        if (allOrders.length === 0) {
+            container.innerHTML = `
+                <div style="text-align:center;color:#666;padding:20px;">
+                    No TP1 / SL orders
+                </div>
+            `;
+            return;
+        }
+
+        let html = '';
+
+        allOrders.forEach(order => {
+
+            const isTP = order.label === 'TP1';
+
+            html += `
+                <div style="
+                    border:1px solid ${isTP ? '#00d084' : '#ff4d4f'};
+                    border-radius:6px;
+                    padding:6px;
+                    margin-bottom:6px;
+                    background:#111;
+                ">
+
+                    <div style="
+                        display:flex;
+                        justify-content:space-between;
+                        margin-bottom:4px;
+                    ">
+                        <strong style="color:white;">
+                            ${order.symbol}
+                        </strong>
+
+                        <span style="
+                            color:${isTP ? '#00d084' : '#ff4d4f'};
+                            font-weight:bold;
+                        ">
+                            ${order.label}
+                        </span>
+                    </div>
+
+                    <div style="font-size:8px;color:#bbb;">
+                        Side: ${order.side}
+                    </div>
+
+                    <div style="font-size:8px;color:#bbb;">
+                        Type: ${order.type}
+                    </div>
+
+                    <div style="font-size:8px;color:#bbb;">
+                        Trigger: ${order.triggerPrice}
+                    </div>
+
+                    <div style="font-size:8px;color:#bbb;">
+                        Qty: ${order.qty}
+                    </div>
+
+                    <div style="font-size:8px;color:#00d4ff;">
+                        Entry: ${order.position_entry || '-'}
+                    </div>
+
+                    <div style="font-size:8px;color:#ffaa00;">
+                        TP1: ${order.position_tp1 || '-'}
+                    </div>
+
+                    <div style="font-size:8px;color:#ff4d4f;">
+                        SL: ${order.position_sl || '-'}
+                    </div>
+
+                    <div style="font-size:8px;color:#888;margin-top:4px;">
+                        ${order.position_status || ''}
+                    </div>
+                </div>
+            `;
+        });
+
+        container.innerHTML = html;
+
+    } catch (err) {
+        console.error('TP1/SL Orders Error:', err);
+    }
+}
+
+/* Initial load */
+updateTP1SLOrders();
+
+/* Auto refresh every 5 sec */
+setInterval(updateTP1SLOrders, 5000);
+</script>
+
 </body>
     </html>
