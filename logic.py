@@ -635,12 +635,12 @@ def get_all_open_conditional_orders(user_id=None):
                 elif 'STOP' in o_type or 'STOP_LOSS' in o_type:
                     label = 'SL'
                 
-                oid = str(o.get('orderId', ''))
-                if oid not in seen_ids:
+                oid = str(o.get('orderId') or '')
+                if oid and oid not in seen_ids:
                     seen_ids.add(oid)
                     qty = float(o.get('origQty', 0))
                     conditional_orders.append({
-                        'orderId': o.get('orderId'),
+                        'orderId': oid,
                         'symbol': o.get('symbol'),
                         'type': o_type,
                         'label': label,

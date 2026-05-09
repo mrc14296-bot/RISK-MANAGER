@@ -1131,52 +1131,7 @@ function updateTP1SLOrders() {
         });
     }
 
-    function updateConditionalOrders() {
-        const container = document.getElementById('conditional_orders_left');
-        const header = document.getElementById('conditional_header_left');
-        if (!container) return;
-
-        fetch('/api/conditional_orders')
-        .then(r => r.json())
-        .then(data => {
-            // API returns conditional_orders (algo/TP1) and basic_orders (SL/TP2/regular)
-            const conditionalOrders = Array.isArray(data.conditional_orders) ? data.conditional_orders : [];
-            const basicOrders = Array.isArray(data.basic_orders) ? data.basic_orders : [];
-            const orders = [...conditionalOrders]; // Only show Binance-conditional orders (TP1, SL) not basic (TP2)
-            if (header) header.textContent = 'CONDITIONAL ORDERS (' + orders.length + ')';
-
-            if (orders.length > 0) {
-                let html = '';
-                orders.forEach(o => {
-                    const sideColor = o.side === 'BUY' ? '#00ff88' : '#ff4444';
-                    const typeLabel = (o.type || '').replace(/_/g, ' ');
-                    const displayPrice = o.stopPrice > 0 ? o.stopPrice.toFixed(4) : (o.price > 0 ? o.price.toFixed(4) : 'N/A');
-                    html += '<div style="border: 1px solid #333; padding: 8px; margin-bottom: 6px; border-radius: 4px; background: rgba(20, 20, 20, 0.6); font-size: 10px;">';
-                    html += '<div style="display: flex; justify-content: space-between; margin-bottom: 4px; border-bottom: 1px solid #222; padding-bottom: 4px;">';
-                    html += '<span style="font-weight: bold; color: #e9fbff;">' + o.symbol + '</span>';
-                    html += '<span style="color: ' + sideColor + '; font-weight: bold;">' + o.side + '</span>';
-                    html += '</div>';
-                    html += '<div style="color: #ffaa00; font-size: 9px; margin-bottom: 4px; font-weight: bold;">' + (o.label || typeLabel) + '</div>';
-                    html += '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-bottom: 6px; color: #aaa; font-size: 9px;">';
-                    html += '<div>Qty: <span style="color: #fff;">' + o.origQty + '</span></div>';
-                    html += '<div>Price: <span style="color: #fff;">$' + displayPrice + '</span></div>';
-                    html += '</div>';
-                    html += '<div style="display: flex; justify-content: space-between; align-items: center;">';
-                    html += '<span style="color: #555; font-size: 8px;">' + o.time + '</span>';
-                    html += "<button onclick=\"cancelOrder('" + o.symbol + "', '" + o.orderId + "')\" style=\"background: #cc0000; color: #fff; border: none; padding: 2px 8px; border-radius: 3px; cursor: pointer; font-size: 9px; font-weight: bold;\">Cancel</button>";
-                    html += '</div>';
-                    html += '</div>';
-                });
-                container.innerHTML = html;
-            } else {
-                container.innerHTML = '<div style="text-align: center; color: #444; padding: 40px 0; font-size: 10px;">No conditional orders</div>';
-            }
-        })
-        .catch(err => {
-            console.error('Error fetching conditional orders:', err);
-            container.innerHTML = '<div style="text-align: center; color: #ff4444; padding: 40px 0; font-size: 10px;">Error loading orders</div>';
-        });
-    }
+    // updateConditionalOrders removed — updateTP1SLOrders handles the panel
 
     function cancelOrder(symbol, orderId) {
         if (!confirm(`Cancel order ${orderId} for ${symbol}?`)) return;
