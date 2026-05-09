@@ -1098,6 +1098,13 @@ def api_debug_conditional_orders():
     raw = logic.get_all_open_conditional_orders(current_user.id)
     return jsonify({"count": len(raw), "orders": raw})
 
+@app.route('/api/debug_tp1_sl')
+@login_required
+def api_debug_tp1_sl():
+    from conditional_orders_enhancement import get_tp1_and_sl_orders
+    result = get_tp1_and_sl_orders(current_user.id)
+    return jsonify(result)
+
 @app.route('/api/cancel_conditional_order', methods=['POST'])
 @login_required
 def api_cancel_conditional_order():
